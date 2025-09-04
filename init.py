@@ -501,8 +501,8 @@ class DatabaseInitApp(App):
     }
     
     ProgressBar {
-        bar-color: #e94560;
-        background-color: #1a1a2e;
+        color: #e94560;
+        background: #1a1a2e;
     }
     """
     
