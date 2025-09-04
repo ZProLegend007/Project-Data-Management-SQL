@@ -8,6 +8,36 @@ Installs python requirements.
 import subprocess
 import sys
 import os
+
+def install_requirements():
+    """Read requirements.txt and install all packages listed in it."""
+    
+    requirements_file = "requirements.txt"
+    
+    if not os.path.exists(requirements_file):
+        print(f"❌ {requirements_file} not found!")
+        sys.exit(1)
+    
+    try:
+        with open(requirements_file, 'r') as f:
+            packages = [line.strip() for line in f if line.strip() and not line.startswith('#')]
+        
+        if not packages:
+            print("📦 No packages to install")
+            return
+        
+        print(f"📦 Installing {len(packages)} packages from {requirements_file}...")
+        
+        subprocess.check_call([sys.executable, "-m", "pip", "install", "-r", requirements_file])
+        print("✅ All packages installed successfully!")
+        
+    except subprocess.CalledProcessError as e:
+        print(f"❌ Failed to install packages: {e}")
+        sys.exit(1)
+    except Exception as e:
+        print(f"❌ Error reading requirements file: {e}")
+        sys.exit(1)
+
 import sqlite3
 import hashlib
 import secrets
@@ -21,35 +51,6 @@ from textual.reactive import reactive
 import time
 
 class Initialise:
-    def install_requirements():
-        """Read requirements.txt and install all packages listed in it."""
-        
-        requirements_file = "requirements.txt"
-        
-        if not os.path.exists(requirements_file):
-            print(f"❌ {requirements_file} not found!")
-            sys.exit(1)
-        
-        try:
-            with open(requirements_file, 'r') as f:
-                packages = [line.strip() for line in f if line.strip() and not line.startswith('#')]
-            
-            if not packages:
-                print("📦 No packages to install")
-                return
-            
-            print(f"📦 Installing {len(packages)} packages from {requirements_file}...")
-            
-            subprocess.check_call([sys.executable, "-m", "pip", "install", "-r", requirements_file])
-            print("✅ All packages installed successfully!")
-            
-        except subprocess.CalledProcessError as e:
-            print(f"❌ Failed to install packages: {e}")
-            sys.exit(1)
-        except Exception as e:
-            print(f"❌ Error reading requirements file: {e}")
-            sys.exit(1)
-
     def __init__(self, db_path="easyflix.db", password="E@syFl1xP@ss"):
         self.db_path = db_path
         self.password = password
