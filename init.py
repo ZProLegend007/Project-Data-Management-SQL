@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-EasyFlix Initialization Script
+EasyFlix Initialisation Script
 Creates and populates the EasyFlix database with encryption and security.
 Installs python requirements.
 """
@@ -12,8 +12,7 @@ import os
 requirements_file = "requirements.txt"
 
 if not os.path.exists(requirements_file):
-    print(f"❌ {requirements_file} not found!")
-    sys.exit(1)
+    print(f"❌ {requirements_file} not found! Initialisation may not work!")
 
 try:
     with open(requirements_file, 'r') as f:
@@ -21,7 +20,6 @@ try:
     
     if not packages:
         print("📦 No packages to install")
-        return
     
     print(f"📦 Installing {len(packages)} packages from {requirements_file}...")
     
@@ -418,22 +416,22 @@ class Initialise:
         conn.commit()
         conn.close()
     
-    def initialize_stats_and_financials(self):
-        """Initialize statistics and financials with today's date"""
+    def initialise_stats_and_financials(self):
+        """Initialise statistics and financials with today's date"""
         today = date.today()
         now = datetime.now()
         
         conn = self._create_connection()
         cursor = conn.cursor()
         
-        # Initialize statistics
+        # Initialise statistics
         cursor.execute('''
         INSERT OR REPLACE INTO STATISTICS 
         (Date, Total_Shows_Rented, Total_Subscriptions, Total_Users, Last_Updated)
         VALUES (?, 0, 0, 0, ?)
         ''', (today, now))
         
-        # Initialize financials
+        # Initialise financials
         cursor.execute('''
         INSERT OR REPLACE INTO FINANCIALS 
         (Date, Total_Revenue_Rent, Total_Revenue_Subscriptions, Total_Combined_Revenue, Last_Updated)
@@ -460,7 +458,7 @@ class LoadingSpinner(Static):
         self.update(f"[bold cyan]{self.spinner_chars[self.current_frame]}[/bold cyan]")
 
 class DatabaseInitApp(App):
-    """EasyFlix Database Initialization Application"""
+    """EasyFlix Database Initialisation Application"""
     
     CSS = """
     Screen {
@@ -509,7 +507,7 @@ class DatabaseInitApp(App):
     """
     
     progress = reactive(0)
-    status_text = reactive("Initializing EasyFlix Database...")
+    status_text = reactive("Initialising EasyFlix Database...")
     
     def compose(self) -> ComposeResult:
         yield Header(show_clock=True)
@@ -517,7 +515,7 @@ class DatabaseInitApp(App):
         with Center():
             with Middle():
                 with Vertical(classes="container"):
-                    yield Static("[bold]🎬 EasyFlix Database Initializer[/bold]", classes="status")
+                    yield Static("[bold]🎬 EasyFlix Initialiser[/bold]", classes="status")
                     yield Static("", id="spinner_container")
                     yield LoadingSpinner(id="spinner")
                     yield Static(self.status_text, id="status")
@@ -527,12 +525,12 @@ class DatabaseInitApp(App):
         yield Footer()
     
     def on_mount(self):
-        self.run_worker(self.initialize_database())
+        self.run_worker(self.initialise_database())
     
-    async def initialize_database(self):
-        """Main database initialization process"""
+    async def initialise_database(self):
+        """Main database initialisation process"""
         try:
-            db_init = DatabaseInitializer()
+            db_init = DatabaseInitialiser()
             
             # Step 1: Create tables
             await self.update_progress(10, "Creating database tables...")
@@ -544,17 +542,17 @@ class DatabaseInitApp(App):
             await asyncio.sleep(2)
             db_init.populate_shows()
             
-            # Step 3: Initialize stats and financials
+            # Step 3: Initialise stats and financials
             await self.update_progress(60, "Setting up statistics and financials...")
             await asyncio.sleep(1)
-            db_init.initialize_stats_and_financials()
+            db_init.initialise_stats_and_financials()
             
             # Step 4: Final verification
             await self.update_progress(80, "Verifying database integrity...")
             await asyncio.sleep(1)
             
             # Step 5: Complete
-            await self.update_progress(100, "Database initialization complete!")
+            await self.update_progress(100, "Database initialisation complete!")
             await asyncio.sleep(1)
             
             # Hide spinner and show success
@@ -581,14 +579,14 @@ class DatabaseInitApp(App):
 
 def main():
     """Main entry point"""
-    print("🎬 EasyFlix Initializer")
+    print("🎬 EasyFlix Initialiser")
     print("=" * 40)
     
     # Check if database already exists
     if Path("easyflix.db").exists():
         response = input("Database already exists. Recreate? (y/N): ")
         if response.lower() != 'y':
-            print("Initialization cancelled.")
+            print("Initialisation cancelled.")
             return
         else:
             Path("easyflix.db").unlink()
