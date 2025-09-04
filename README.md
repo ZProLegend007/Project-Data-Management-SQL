@@ -1,6 +1,8 @@
-Part 1: ./part1.md
+#### Click links below for research and evaluation
+### [Part 1 - Research and Investigation](https://github.com/ZProLegend007/Project-Data-Management-SQL/blob/main/Part1.md)
 
 ## Development notes:
+This lists changes to the program since the research stage due to unforseen issues or ideas
 
 ### Found issues and solutions:
 - **Users should not have access to any data except shows**
