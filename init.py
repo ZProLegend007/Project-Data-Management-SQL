@@ -45,7 +45,7 @@ from textual.widgets import Header, Footer, Static, ProgressBar, Label
 from textual.reactive import reactive
 import time
 
-class Initialise:
+class DatabaseInitialiser:
     def __init__(self, db_path="easyflix.db", password="E@syFl1xP@ss"):
         self.db_path = db_path
         self.password = password
