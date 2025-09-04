@@ -8,7 +8,9 @@ Installs python requirements.
 import subprocess
 import sys
 import os
-    
+import site
+import importlib
+
 requirements_file = "requirements.txt"
 
 if not os.path.exists(requirements_file):
@@ -32,6 +34,8 @@ except subprocess.CalledProcessError as e:
 except Exception as e:
     print(f"❌ Error reading requirements file: {e}")
     sys.exit(1)
+
+importlib.reload(site)
 
 import sqlite3
 import hashlib
