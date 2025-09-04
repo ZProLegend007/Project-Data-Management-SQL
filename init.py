@@ -8,35 +8,32 @@ Installs python requirements.
 import subprocess
 import sys
 import os
+    
+requirements_file = "requirements.txt"
 
-def install_requirements():
-    """Read requirements.txt and install all packages listed in it."""
+if not os.path.exists(requirements_file):
+    print(f"❌ {requirements_file} not found!")
+    sys.exit(1)
+
+try:
+    with open(requirements_file, 'r') as f:
+        packages = [line.strip() for line in f if line.strip() and not line.startswith('#')]
     
-    requirements_file = "requirements.txt"
+    if not packages:
+        print("📦 No packages to install")
+        return
     
-    if not os.path.exists(requirements_file):
-        print(f"❌ {requirements_file} not found!")
-        sys.exit(1)
+    print(f"📦 Installing {len(packages)} packages from {requirements_file}...")
     
-    try:
-        with open(requirements_file, 'r') as f:
-            packages = [line.strip() for line in f if line.strip() and not line.startswith('#')]
-        
-        if not packages:
-            print("📦 No packages to install")
-            return
-        
-        print(f"📦 Installing {len(packages)} packages from {requirements_file}...")
-        
-        subprocess.check_call([sys.executable, "-m", "pip", "install", "-r", requirements_file])
-        print("✅ All packages installed successfully!")
-        
-    except subprocess.CalledProcessError as e:
-        print(f"❌ Failed to install packages: {e}")
-        sys.exit(1)
-    except Exception as e:
-        print(f"❌ Error reading requirements file: {e}")
-        sys.exit(1)
+    subprocess.check_call([sys.executable, "-m", "pip", "install", "-r", requirements_file])
+    print("✅ All packages installed successfully!")
+    
+except subprocess.CalledProcessError as e:
+    print(f"❌ Failed to install packages: {e}")
+    sys.exit(1)
+except Exception as e:
+    print(f"❌ Error reading requirements file: {e}")
+    sys.exit(1)
 
 import sqlite3
 import hashlib
@@ -601,5 +598,4 @@ def main():
     app.run()
 
 if __name__ == "__main__":
-    install_requirements()
     main()
