@@ -5,14 +5,44 @@ EasyFlixUser - User interface for EasyFlix streaming service
 
 import subprocess
 import json
+import sys
+import os
 from textual.app import App, ComposeResult
 from textual.containers import Container, Horizontal, Vertical, ScrollableContainer
 from textual.widgets import Button, Input, Label, Select, Static, Header, Footer
-from textual.screen import Screen
+from textual.screen import Screen, ModalScreen
 from textual.binding import Binding
-from textual import events
 from textual.reactive import reactive
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Any
+
+class RentConfirmModal(ModalScreen):
+    """Modal for confirming premium show rental"""
+    
+    def __init__(self, show_name: str, cost: float, show_id: int):
+        super().__init__()
+        self.show_name = show_name
+        self.cost = cost
+        self.show_id = show_id
+    
+    def compose(self) -> ComposeResult:
+        yield Container(
+            Static(f"Rent Premium Show", classes="modal_title"),
+            Static(f"Show: {self.show_name}", classes="modal_text"),
+            Static(f"Cost: ${self.cost:.2f}", classes="modal_text"),
+            Static("Would you like to rent this premium show?", classes="modal_text"),
+            Horizontal(
+                Button("Rent Show", id="confirm_rent", variant="primary"),
+                Button("Cancel", id="cancel_rent", variant="default"),
+                classes="modal_buttons"
+            ),
+            classes="modal_container"
+        )
+    
+    def on_button_pressed(self, event: Button.Pressed) -> None:
+        if event.button.id == "confirm_rent":
+            self.dismiss({"action": "rent", "show_id": self.show_id})
+        else:
+            self.dismiss(None)
 
 class LoginScreen(Screen):
     """Login screen for user authentication"""
@@ -167,6 +197,39 @@ class MainScreen(Screen):
         elif event.button.id == "logout_btn":
             self.app.current_user = None
             self.app.pop_screen()
+        elif event.button.id and event.button.id.startswith("add_show_"):
+            show_id = int(event.button.id.replace("add_show_", ""))
+            self.handle_show_action(show_id)
+        elif event.button.id == "change_password":
+            self.app.push_screen(ChangePasswordScreen())
+        elif event.button.id == "change_subscription":
+            self.app.push_screen(ChangeSubscriptionScreen())
+
+    def handle_show_action(self, show_id: int) -> None:
+        """Handle show action (add or rent)"""
+        # Find the show data
+        result = self.app.call_api("get_all_shows")
+        if result and result.get("success"):
+            shows = result.get("data", [])
+            show = next((s for s in shows if s["show_id"] == show_id), None)
+            
+            if show:
+                is_premium = show.get("access_group") == "Premium"
+                user_subscription = self.app.current_user.get("subscription_level", "Basic")
+                
+                if is_premium and user_subscription == "Basic":
+                    # Show rental confirmation modal
+                    def handle_modal_result(result):
+                        if result and result.get("action") == "rent":
+                            self.rent_show(show_id)
+                    
+                    self.app.push_screen(
+                        RentConfirmModal(show["name"], show.get("cost_to_rent", 0), show_id),
+                        handle_modal_result
+                    )
+                else:
+                    # Direct rental for premium users or basic shows
+                    self.rent_show(show_id)
 
     def load_shows(self) -> None:
         """Load and display all shows"""
@@ -177,12 +240,16 @@ class MainScreen(Screen):
         if result and result.get("success"):
             shows = result.get("data", [])
             
-            with content:
-                yield Static("Available Shows", classes="content_title")
-                yield ScrollableContainer(
+            content.mount(Static("Available Shows", classes="content_title"))
+            if shows:
+                content.mount(ScrollableContainer(
                     *[self.create_show_card(show) for show in shows],
                     classes="shows_grid"
-                )
+                ))
+            else:
+                content.mount(Static("No shows available", classes="empty_message"))
+        else:
+            content.mount(Static("Error loading shows", classes="error_message"))
 
     def load_my_shows(self) -> None:
         """Load and display user's rented shows"""
@@ -192,15 +259,19 @@ class MainScreen(Screen):
         user_id = self.app.current_user.get("user_id")
         result = self.app.call_api("get_user_rentals", user_id=user_id)
         
+        content.mount(Static("My Shows", classes="content_title"))
+        
         if result and result.get("success"):
             rentals = result.get("data", [])
-            
-            with content:
-                yield Static("My Shows", classes="content_title")
-                yield ScrollableContainer(
+            if rentals:
+                content.mount(ScrollableContainer(
                     *[self.create_rental_card(rental) for rental in rentals],
                     classes="shows_grid"
-                )
+                ))
+            else:
+                content.mount(Static("No rentals found", classes="empty_message"))
+        else:
+            content.mount(Static("Error loading rentals", classes="error_message"))
 
     def load_account(self) -> None:
         """Load and display account information"""
@@ -209,23 +280,23 @@ class MainScreen(Screen):
         
         user = self.app.current_user
         
-        with content:
-            yield Static("Account Information", classes="content_title")
-            yield Container(
-                Static(f"Username: {user.get('username', 'N/A')}", classes="info_item"),
-                Static(f"Subscription: {user.get('subscription_level', 'N/A')}", classes="info_item"),
-                Static(f"Total Spent: ${user.get('total_spent', 0):.2f}", classes="info_item"),
-                Button("Change Password", id="change_password", variant="default"),
-                Button("Change Subscription", id="change_subscription", variant="primary"),
-                classes="account_info"
-            )
+        content.mount(Static("Account Information", classes="content_title"))
+        content.mount(Container(
+            Static(f"Username: {user.get('username', 'N/A')}", classes="info_item"),
+            Static(f"Email: {user.get('email', 'N/A')}", classes="info_item"),
+            Static(f"Subscription: {user.get('subscription_level', 'N/A')}", classes="info_item"),
+            Static(f"Total Spent: ${user.get('total_spent', 0):.2f}", classes="info_item"),
+            Static(f"Favourite Genre: {user.get('favourite_genre', 'Not set')}", classes="info_item"),
+            Button("Change Password", id="change_password", variant="default"),
+            Button("Change Subscription", id="change_subscription", variant="primary"),
+            classes="account_info"
+        ))
 
     def create_show_card(self, show: Dict) -> Container:
         """Create a show card widget"""
         is_premium = show.get("access_group") == "Premium"
         user_subscription = self.app.current_user.get("subscription_level", "Basic")
         
-        # Determine button style and text
         if is_premium and user_subscription == "Basic":
             button_text = f"Rent (${show.get('cost_to_rent', 0):.2f})"
             button_variant = "warning"
@@ -241,6 +312,7 @@ class MainScreen(Screen):
             Static(f"Rating: {show.get('rating', 'N/A')}/10", classes="show_info"),
             Static(f"Director: {show.get('director', 'N/A')}", classes="show_info"),
             Static(f"Length: {show.get('length', 'N/A')} min", classes="show_info"),
+            Static(f"Release: {show.get('release_date', 'N/A')}", classes="show_info"),
             Button(
                 button_text,
                 id=f"add_show_{show.get('show_id')}",
@@ -261,17 +333,6 @@ class MainScreen(Screen):
             classes="rental_card"
         )
 
-    def on_button_pressed(self, event: Button.Pressed) -> None:
-        button_id = event.button.id
-        
-        if button_id and button_id.startswith("add_show_"):
-            show_id = int(button_id.replace("add_show_", ""))
-            self.rent_show(show_id)
-        elif button_id == "change_password":
-            self.app.push_screen(ChangePasswordScreen())
-        elif button_id == "change_subscription":
-            self.app.push_screen(ChangeSubscriptionScreen())
-
     def rent_show(self, show_id: int) -> None:
         """Rent a show"""
         user_id = self.app.current_user.get("user_id")
@@ -279,7 +340,11 @@ class MainScreen(Screen):
         
         if result and result.get("success"):
             self.notify("Show added successfully!", severity="information")
-            # Refresh the current view
+            # Update user's total spent
+            user_info_result = self.app.call_api("get_user_info", user_id=user_id)
+            if user_info_result and user_info_result.get("success"):
+                self.app.current_user.update(user_info_result.get("data", {}))
+            
             if self.current_view == "shows":
                 self.load_shows()
         else:
@@ -338,6 +403,8 @@ class ChangeSubscriptionScreen(Screen):
         yield Container(
             Static("Change Subscription", classes="title"),
             Container(
+                Label("Current Subscription:"),
+                Static(f"{self.app.current_user.get('subscription_level', 'Unknown')}", classes="current_sub"),
                 Label("New Subscription Level:"),
                 Select([("Basic", "Basic"), ("Premium", "Premium")], id="subscription"),
                 Horizontal(
@@ -374,45 +441,33 @@ class EasyFlixUserApp(App):
     """Main EasyFlix User Application"""
     
     CSS = """
-    /* Theme Colors */
-    :root {
-        --primary: #FF8C00;
-        --secondary: #696969;
-        --success: #32CD32;
-        --warning: #FFD700;
-        --error: #DC143C;
-        --background: #2F2F2F;
-        --surface: #404040;
-    }
-    
-    /* General Styles */
     Screen {
-        background: $background;
+        background: #2F2F2F;
         color: white;
     }
     
     .title {
         text-align: center;
         text-style: bold;
-        color: $primary;
+        color: #FF8C00;
         margin: 2;
         content-align: center middle;
     }
     
     .content_title {
         text-style: bold;
-        color: $primary;
+        color: #FF8C00;
         margin: 1;
         padding: 1;
+        font-size: 2;
     }
     
-    /* Login Screen */
     .login_container {
         align: center middle;
         width: 50%;
         height: 50%;
-        background: $surface;
-        border: solid $primary;
+        background: #404040;
+        border: solid #FF8C00;
     }
     
     .button_container {
@@ -421,13 +476,12 @@ class EasyFlixUserApp(App):
         margin: 2;
     }
     
-    /* Form Styles */
     .main_container {
         align: center middle;
         width: 60%;
         height: 70%;
-        background: $surface;
-        border: solid $primary;
+        background: #404040;
+        border: solid #FF8C00;
     }
     
     .form_container {
@@ -442,12 +496,12 @@ class EasyFlixUserApp(App):
     
     Input {
         margin: 1;
-        background: $background;
-        border: solid $secondary;
+        background: #2F2F2F;
+        border: solid #696969;
     }
     
     Input:focus {
-        border: solid $primary;
+        border: solid #FF8C00;
     }
     
     Label {
@@ -457,25 +511,30 @@ class EasyFlixUserApp(App):
     
     Select {
         margin: 1;
-        background: $background;
-        border: solid $secondary;
+        background: #2F2F2F;
+        border: solid #696969;
     }
     
-    /* Main Screen Layout */
+    .current_sub {
+        margin: 1;
+        color: #FF8C00;
+        text-style: bold;
+    }
+    
     .main_layout {
         height: 100%;
     }
     
     .sidebar {
         width: 20%;
-        background: $surface;
+        background: #404040;
         padding: 1;
-        border-right: solid $primary;
+        border-right: solid #FF8C00;
     }
     
     .menu_title {
         text-style: bold;
-        color: $primary;
+        color: #FF8C00;
         margin-bottom: 1;
         text-align: center;
     }
@@ -485,30 +544,29 @@ class EasyFlixUserApp(App):
         padding: 1;
     }
     
-    /* Show Cards */
     .shows_grid {
         height: 100%;
     }
     
     .show_card {
-        background: $surface;
-        border: solid $secondary;
+        background: #404040;
+        border: solid #696969;
         margin: 1;
         padding: 1;
         height: auto;
     }
     
     .basic_card {
-        border-left: solid $primary;
+        border-left: solid #FF8C00;
     }
     
     .premium_card {
-        border-left: solid $warning;
+        border-left: solid #FFD700;
     }
     
     .show_title {
         text-style: bold;
-        color: $primary;
+        color: #FF8C00;
         margin-bottom: 1;
     }
     
@@ -518,45 +576,43 @@ class EasyFlixUserApp(App):
     }
     
     .basic_button {
-        background: $primary;
+        background: #FF8C00;
         margin-top: 1;
     }
     
     .premium_button {
-        background: $warning;
+        background: #FFD700;
         color: black;
         margin-top: 1;
     }
     
     .premium_included {
-        background: $success;
+        background: #32CD32;
         margin-top: 1;
     }
     
-    /* Rental Cards */
     .rental_card {
-        background: $surface;
-        border: solid $primary;
+        background: #404040;
+        border: solid #FF8C00;
         margin: 1;
         padding: 1;
         height: auto;
     }
     
     .status_active {
-        color: $success;
+        color: #32CD32;
         text-style: bold;
     }
     
     .status_expired {
-        color: $error;
+        color: #DC143C;
         text-style: bold;
     }
     
-    /* Account Info */
     .account_info {
         padding: 2;
-        background: $surface;
-        border: solid $primary;
+        background: #404040;
+        border: solid #FF8C00;
         margin: 2;
     }
     
@@ -565,33 +621,73 @@ class EasyFlixUserApp(App):
         color: white;
     }
     
-    /* Buttons */
+    .empty_message {
+        color: #696969;
+        text-align: center;
+        margin: 2;
+    }
+    
+    .error_message {
+        color: #DC143C;
+        text-align: center;
+        margin: 2;
+    }
+    
+    /* Modal Styles */
+    .modal_container {
+        background: #404040;
+        border: solid #FF8C00;
+        width: 50%;
+        height: auto;
+        align: center middle;
+        padding: 2;
+    }
+    
+    .modal_title {
+        text-style: bold;
+        color: #FF8C00;
+        text-align: center;
+        margin-bottom: 1;
+    }
+    
+    .modal_text {
+        color: white;
+        text-align: center;
+        margin: 1;
+    }
+    
+    .modal_buttons {
+        margin-top: 2;
+        height: auto;
+        align: center middle;
+    }
+    
     Button {
         margin: 1;
     }
     
     Button.-primary {
-        background: $primary;
+        background: #FF8C00;
         color: white;
     }
     
     Button.-success {
-        background: $success;
+        background: #32CD32;
         color: white;
     }
     
     Button.-warning {
-        background: $warning;
+        background: #FFD700;
         color: black;
     }
     
     Button.-error {
-        background: $error;
+        background: #DC143C;
         color: white;
     }
     
     Button.-default {
-        background: $secondary;
+        background: #696969;
         color: white;
     }
     """
@@ -611,19 +707,32 @@ class EasyFlixUserApp(App):
     def call_api(self, command: str, **kwargs) -> Optional[Dict]:
         """Call the EFAPI with the given command and arguments"""
         try:
-            cmd = ["python3", "EFAPI.py", "--command", command]
+            # Check if EFAPI.py exists
+            if not os.path.exists("EFAPI.py"):
+                self.notify("EFAPI.py not found in current directory", severity="error")
+                return None
+            
+            cmd = [sys.executable, "EFAPI.py", "--command", command]
             
             for key, value in kwargs.items():
                 cmd.extend([f"--{key}", str(value)])
             
-            result = subprocess.run(cmd, capture_output=True, text=True)
+            result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
             
             if result.returncode == 0:
-                return json.loads(result.stdout)
+                try:
+                    return json.loads(result.stdout)
+                except json.JSONDecodeError:
+                    self.notify("Invalid JSON response from API", severity="error")
+                    return None
             else:
-                self.notify(f"API Error: {result.stderr}", severity="error")
+                error_msg = result.stderr.strip() if result.stderr else "Unknown API error"
+                self.notify(f"API Error: {error_msg}", severity="error")
                 return None
                 
+        except subprocess.TimeoutExpired:
+            self.notify("API call timed out", severity="error")
+            return None
         except Exception as e:
             self.notify(f"Error calling API: {e}", severity="error")
             return None
