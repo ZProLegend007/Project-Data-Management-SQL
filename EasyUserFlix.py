@@ -459,7 +459,6 @@ class EasyFlixUserApp(App):
         color: #FF8C00;
         margin: 1;
         padding: 1;
-        font-size: 2;
     }
     
     .login_container {
