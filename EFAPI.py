@@ -64,7 +64,8 @@ class EFAPI_Commands:
             cursor = conn.cursor()
             
             cursor.execute("""
-                SELECT User_ID, Password_Hash, Salt FROM CUSTOMERS 
+                SELECT User_ID, Password_Hash, Salt, Username, Email, Subscription_Level, Total_Spent, Favourite_Genre
+                FROM CUSTOMERS 
                 WHERE Username = ?
             """, (username,))
             
@@ -72,11 +73,19 @@ class EFAPI_Commands:
             conn.close()
             
             if result:
-                user_id, stored_hash, salt = result
+                user_id, stored_hash, salt, username, email, subscription_level, total_spent, favourite_genre = result
                 input_hash = self._hash_password(password, salt)
                 
                 if input_hash == stored_hash:
-                    return self._format_response(True, {"user_id": user_id}, "Authentication successful")
+                    user_data = {
+                        "user_id": user_id,
+                        "username": username,
+                        "email": email,
+                        "subscription_level": subscription_level,
+                        "total_spent": total_spent,
+                        "favourite_genre": favourite_genre
+                    }
+                    return self._format_response(True, user_data, "Authentication successful")
                 else:
                     return self._format_response(False, message="Invalid credentials")
             else:
@@ -673,7 +682,7 @@ def main():
     args = parser.parse_args()
     
     try:
-        api = EFAPI(args.db_path)
+        api = EFAPI_Commands(args.db_path)
         
         # Get the method from the API class
         method = getattr(api, args.command, None)
