@@ -85,7 +85,7 @@ class EFAPI_Commands:
                         "total_spent": total_spent,
                         "favourite_genre": favourite_genre,
                         "shows": shows or "",
-                        "marketing_opt_in": bool(marketing_opt_in)
+                        "marketing_opt_in": bool(marketing_opt_in) if marketing_opt_in is not None else False
                     }
                     return self._format_response(True, user_data, "Authentication successful")
                 else:
@@ -113,7 +113,7 @@ class EFAPI_Commands:
             
             salt = self._generate_salt()
             password_hash = self._hash_password(password, salt)
-            marketing_bool = marketing_opt_in.lower() == "true"
+            marketing_bool = 1 if marketing_opt_in.lower() == "true" else 0
             
             cursor.execute("""
                 INSERT INTO CUSTOMERS (Username, Email, Password_Hash, Salt, Subscription_Level, 
@@ -143,11 +143,11 @@ class EFAPI_Commands:
             where_conditions = []
             params = []
             
-            if genre and genre.lower() != "all":
+            if genre and genre.lower() not in ["all", ""]:
                 where_conditions.append("Genre = ?")
                 params.append(genre)
             
-            if access_group and access_group.lower() != "all":
+            if access_group and access_group.lower() not in ["all", ""]:
                 where_conditions.append("Access_Group = ?")
                 params.append(access_group)
             
@@ -255,7 +255,7 @@ class EFAPI_Commands:
                     "total_spent": row[4],
                     "favourite_genre": row[5],
                     "shows": row[6] or "",
-                    "marketing_opt_in": bool(row[7])
+                    "marketing_opt_in": bool(row[7]) if row[7] is not None else False
                 }
                 return self._format_response(True, user, "User found")
             else:
@@ -293,7 +293,7 @@ class EFAPI_Commands:
             conn = self._get_connection()
             cursor = conn.cursor()
             
-            opt_in_bool = opt_in.lower() == "true"
+            opt_in_bool = 1 if opt_in.lower() == "true" else 0
             
             cursor.execute("""
                 UPDATE CUSTOMERS 
@@ -490,7 +490,6 @@ class EFAPI_Commands:
         except Exception as e:
             return self._format_response(False, message=f"Error changing password: {e}")
     
-    # Additional methods for admin functionality
     def get_all_users(self) -> str:
         """Get all users (admin only)"""
         try:
@@ -519,6 +518,291 @@ class EFAPI_Commands:
             
         except Exception as e:
             return self._format_response(False, message=f"Error retrieving users: {e}")
+    
+    def get_statistics(self) -> str:
+        """Get system statistics"""
+        try:
+            conn = self._get_connection()
+            cursor = conn.cursor()
+            
+            cursor.execute("""
+                SELECT Date, Total_Shows_Rented, Total_Subscriptions, Total_Users, Last_Updated
+                FROM STATISTICS
+                ORDER BY Date DESC
+                LIMIT 1
+            """)
+            
+            stats_row = cursor.fetchone()
+            
+            cursor.execute("""
+                SELECT Date, Total_Revenue_Rent, Total_Revenue_Subscriptions, 
+                       Total_Combined_Revenue, Last_Updated
+                FROM FINANCIALS
+                ORDER BY Date DESC
+                LIMIT 1
+            """)
+            
+            finance_row = cursor.fetchone()
+            conn.close()
+            
+            data = {
+                "statistics": {
+                    "date": stats_row[0] if stats_row else None,
+                    "total_shows_rented": stats_row[1] if stats_row else 0,
+                    "total_subscriptions": stats_row[2] if stats_row else 0,
+                    "total_users": stats_row[3] if stats_row else 0,
+                    "last_updated": stats_row[4] if stats_row else None
+                },
+                "financials": {
+                    "date": finance_row[0] if finance_row else None,
+                    "total_revenue_rent": finance_row[1] if finance_row else 0.00,
+                    "total_revenue_subscriptions": finance_row[2] if finance_row else 0.00,
+                    "total_combined_revenue": finance_row[3] if finance_row else 0.00,
+                    "last_updated": finance_row[4] if finance_row else None
+                }
+            }
+            
+            return self._format_response(True, data, "Statistics retrieved")
+            
+        except Exception as e:
+            return self._format_response(False, message=f"Error retrieving statistics: {e}")
+
+    def get_finances(self) -> str:
+        """Get financial data"""
+        try:
+            conn = self._get_connection()
+            cursor = conn.cursor()
+            
+            cursor.execute("""
+                SELECT Date, Total_Revenue_Rent, Total_Revenue_Subscriptions, 
+                       Total_Combined_Revenue, Last_Updated
+                FROM FINANCIALS
+                ORDER BY Date DESC
+            """)
+            
+            finances = []
+            for row in cursor.fetchall():
+                finances.append({
+                    "date": row[0],
+                    "total_revenue_rent": row[1],
+                    "total_revenue_subscriptions": row[2],
+                    "total_combined_revenue": row[3],
+                    "last_updated": row[4]
+                })
+            
+            conn.close()
+            return self._format_response(True, finances, f"Retrieved {len(finances)} financial records")
+        
+        except Exception as e:
+            return self._format_response(False, message=f"Error retrieving finances: {e}")
+
+    def delete_user(self, user_id: int) -> str:
+        """Delete user account"""
+        try:
+            conn = self._get_connection()
+            cursor = conn.cursor()
+            
+            # Delete user's rentals first
+            cursor.execute("DELETE FROM RENTALS WHERE User_ID = ?", (user_id,))
+            
+            # Delete user account
+            cursor.execute("DELETE FROM CUSTOMERS WHERE User_ID = ?", (user_id,))
+            
+            if cursor.rowcount > 0:
+                conn.commit()
+                conn.close()
+                return self._format_response(True, message="User account deleted successfully")
+            else:
+                conn.close()
+                return self._format_response(False, message="User not found")
+                
+        except Exception as e:
+            return self._format_response(False, message=f"Error deleting user: {e}")
+    
+    def add_show(self, name: str, release_date: str, rating: float, director: str, 
+                 length: int, genre: str, access_group: str, cost_to_rent: float) -> str:
+        """Add new show to catalogue"""
+        try:
+            conn = self._get_connection()
+            cursor = conn.cursor()
+            
+            cursor.execute("""
+                INSERT INTO SHOWS (Name, Release_Date, Rating, Director, Length, 
+                                 Genre, Access_Group, Cost_To_Rent)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            """, (name, release_date, rating, director, length, genre, access_group, cost_to_rent))
+            
+            show_id = cursor.lastrowid
+            conn.commit()
+            conn.close()
+            
+            return self._format_response(True, {"show_id": show_id}, "Show added successfully")
+            
+        except Exception as e:
+            return self._format_response(False, message=f"Error adding show: {e}")
+    
+    def update_show_access(self, show_id: int, access_group: str) -> str:
+        """Update show access group"""
+        try:
+            conn = self._get_connection()
+            cursor = conn.cursor()
+            
+            cursor.execute("""
+                UPDATE SHOWS 
+                SET Access_Group = ?
+                WHERE Show_ID = ?
+            """, (access_group, show_id))
+            
+            if cursor.rowcount > 0:
+                conn.commit()
+                conn.close()
+                return self._format_response(True, message="Show access group updated successfully")
+            else:
+                conn.close()
+                return self._format_response(False, message="Show not found")
+                
+        except Exception as e:
+            return self._format_response(False, message=f"Error updating show access: {e}")
+    
+    def update_show_cost(self, show_id: int, cost_to_rent: float) -> str:
+        """Update show rental cost"""
+        try:
+            conn = self._get_connection()
+            cursor = conn.cursor()
+            
+            cursor.execute("""
+                UPDATE SHOWS 
+                SET Cost_To_Rent = ?
+                WHERE Show_ID = ?
+            """, (cost_to_rent, show_id))
+            
+            if cursor.rowcount > 0:
+                conn.commit()
+                conn.close()
+                return self._format_response(True, message="Show rental cost updated successfully")
+            else:
+                conn.close()
+                return self._format_response(False, message="Show not found")
+                
+        except Exception as e:
+            return self._format_response(False, message=f"Error updating show cost: {e}")
+    
+    def get_all_rentals(self) -> str:
+        """Get all current rentals (admin only)"""
+        try:
+            conn = self._get_connection()
+            cursor = conn.cursor()
+            
+            cursor.execute("""
+                SELECT r.Rental_ID, r.User_ID, c.Username, r.Show_ID, s.Name,
+                       r.Rental_Date, r.Return_Date, r.Expired, r.Cost
+                FROM RENTALS r
+                JOIN CUSTOMERS c ON r.User_ID = c.User_ID
+                JOIN SHOWS s ON r.Show_ID = s.Show_ID
+                ORDER BY r.Rental_Date DESC
+            """)
+            
+            rentals = []
+            for row in cursor.fetchall():
+                rentals.append({
+                    "rental_id": row[0],
+                    "user_id": row[1],
+                    "username": row[2],
+                    "show_id": row[3],
+                    "show_name": row[4],
+                    "rental_date": row[5],
+                    "return_date": row[6],
+                    "expired": bool(row[7]),
+                    "cost": row[8]
+                })
+            
+            conn.close()
+            return self._format_response(True, rentals, f"Retrieved {len(rentals)} rentals")
+            
+        except Exception as e:
+            return self._format_response(False, message=f"Error retrieving rentals: {e}")
+    
+    def return_rental(self, rental_id: int) -> str:
+        """Return a rental"""
+        try:
+            conn = self._get_connection()
+            cursor = conn.cursor()
+            
+            return_date = date.today()
+            
+            cursor.execute("""
+                UPDATE RENTALS 
+                SET Return_Date = ?, Expired = 1
+                WHERE Rental_ID = ?
+            """, (return_date, rental_id))
+            
+            if cursor.rowcount > 0:
+                conn.commit()
+                conn.close()
+                return self._format_response(True, message="Rental returned successfully")
+            else:
+                conn.close()
+                return self._format_response(False, message="Rental not found")
+                
+        except Exception as e:
+            return self._format_response(False, message=f"Error returning rental: {e}")
+    
+    def search_shows_by_genre(self, genre: str) -> str:
+        """Search shows by genre"""
+        try:
+            conn = self._get_connection()
+            cursor = conn.cursor()
+            
+            cursor.execute("""
+                SELECT Show_ID, Name, Release_Date, Rating, Director, Length, 
+                       Genre, Access_Group, Cost_To_Rent
+                FROM SHOWS
+                WHERE Genre LIKE ?
+                ORDER BY Name
+            """, (f"%{genre}%",))
+            
+            shows = []
+            for row in cursor.fetchall():
+                shows.append({
+                    "show_id": row[0],
+                    "name": row[1],
+                    "release_date": row[2],
+                    "rating": row[3],
+                    "director": row[4],
+                    "length": row[5],
+                    "genre": row[6],
+                    "access_group": row[7],
+                    "cost_to_rent": row[8]
+                })
+            
+            conn.close()
+            return self._format_response(True, shows, f"Found {len(shows)} shows in genre: {genre}")
+            
+        except Exception as e:
+            return self._format_response(False, message=f"Error searching shows: {e}")
+    
+    def update_user_favourite_genre(self, user_id: int, favourite_genre: str) -> str:
+        """Update user's favourite genre"""
+        try:
+            conn = self._get_connection()
+            cursor = conn.cursor()
+            
+            cursor.execute("""
+                UPDATE CUSTOMERS 
+                SET Favourite_Genre = ?
+                WHERE User_ID = ?
+            """, (favourite_genre, user_id))
+            
+            if cursor.rowcount > 0:
+                conn.commit()
+                conn.close()
+                return self._format_response(True, message="Favourite genre updated successfully")
+            else:
+                conn.close()
+                return self._format_response(False, message="User not found")
+                
+        except Exception as e:
+            return self._format_response(False, message=f"Error updating favourite genre: {e}")
 
 def main():
     parser = argparse.ArgumentParser(description="EasyFlix API")
@@ -539,6 +823,14 @@ def main():
     parser.add_argument('--sort_order', default='ASC', help='Sort order (ASC/DESC)')
     parser.add_argument('--genre', help='Filter by genre')
     parser.add_argument('--access_group', help='Filter by access group')
+    parser.add_argument('--name', help='Show name')
+    parser.add_argument('--release_date', help='Show release date')
+    parser.add_argument('--rating', type=float, help='Show rating')
+    parser.add_argument('--director', help='Show director')
+    parser.add_argument('--length', type=int, help='Show length in minutes')
+    parser.add_argument('--cost_to_rent', type=float, help='Show rental cost')
+    parser.add_argument('--rental_id', type=int, help='Rental ID')
+    parser.add_argument('--favourite_genre', help='User favourite genre')
         
     args = parser.parse_args()
     
@@ -585,6 +877,22 @@ def main():
             kwargs['genre'] = args.genre
         if args.access_group:
             kwargs['access_group'] = args.access_group
+        if args.name:
+            kwargs['name'] = args.name
+        if args.release_date:
+            kwargs['release_date'] = args.release_date
+        if args.rating:
+            kwargs['rating'] = args.rating
+        if args.director:
+            kwargs['director'] = args.director
+        if args.length:
+            kwargs['length'] = args.length
+        if args.cost_to_rent:
+            kwargs['cost_to_rent'] = args.cost_to_rent
+        if args.rental_id:
+            kwargs['rental_id'] = args.rental_id
+        if args.favourite_genre:
+            kwargs['favourite_genre'] = args.favourite_genre
         
         # Call the method with appropriate arguments
         result = method(**kwargs)
