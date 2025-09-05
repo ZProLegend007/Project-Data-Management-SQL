@@ -8,13 +8,13 @@ import json
 import sys
 import os
 import asyncio
+from textual import work
 from textual.app import App, ComposeResult
 from textual.containers import Container, Horizontal, Vertical, ScrollableContainer
 from textual.widgets import Button, Input, Label, Select, Static, Header, Footer, LoadingIndicator, Checkbox
 from textual.screen import Screen, ModalScreen
 from textual.binding import Binding
 from textual.reactive import reactive
-from textual.worker import work
 from typing import Dict, List, Optional, Any
 
 class LoadingScreen(ModalScreen):
