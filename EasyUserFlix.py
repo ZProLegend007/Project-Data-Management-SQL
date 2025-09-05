@@ -463,10 +463,11 @@ class EasyFlixUserApp(App):
     
     .login_container {
         align: center middle;
-        width: 50%;
-        height: 50%;
+        width: 100%;
+        height: 100%;
         background: #404040;
         border: solid #FF8C00;
+        padding: 4;
     }
     
     .button_container {
@@ -477,8 +478,8 @@ class EasyFlixUserApp(App):
     
     .main_container {
         align: center middle;
-        width: 60%;
-        height: 70%;
+        width: 100%;
+        height: 100%;
         background: #404040;
         border: solid #FF8C00;
     }
@@ -552,7 +553,7 @@ class EasyFlixUserApp(App):
         border: solid #696969;
         margin: 1;
         padding: 1;
-        height: auto;
+        height: 100%;
     }
     
     .basic_card {
@@ -595,7 +596,7 @@ class EasyFlixUserApp(App):
         border: solid #FF8C00;
         margin: 1;
         padding: 1;
-        height: auto;
+        height: 100%;
     }
     
     .status_active {
@@ -636,8 +637,8 @@ class EasyFlixUserApp(App):
     .modal_container {
         background: #404040;
         border: solid #FF8C00;
-        width: 50%;
-        height: auto;
+        width: 100%;
+        height: 100%;
         align: center middle;
         padding: 2;
     }
