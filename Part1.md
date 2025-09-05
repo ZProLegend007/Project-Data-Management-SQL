@@ -8,11 +8,11 @@
 
 | **Phase** | **Task** | **Duration** | **Completion %** |
 |-----------|----------|--------------|------------------|
-| **Phase 1** | Research & Design | 3 days | 40% |
+| **Phase 1** | Research & Design | 3 days | 100% |
 | | Problem analysis | 1 day | |
 | | Database design & ERD | 1 day | |
 | | Interface mockups | 1 day | |
-| **Phase 2** | Development | 4 days | 0% |
+| **Phase 2** | Development | 4 days | 40% |
 | | Database implementation | 1 day | |
 | | Core functions | 1 day | |
 | | User interface | 1 day | |
