@@ -225,12 +225,9 @@ class MainScreen(Screen):
     """Main application screen with optimized loading"""
     
     current_view = reactive("shows")
-    current_page = reactive(1)
     current_sort = reactive("name")
     current_order = reactive("ASC")
     current_genre = reactive("all")
-    shows_cache = reactive({})
-    visible_shows = reactive([])
     
     def compose(self) -> ComposeResult:
         yield Header()
@@ -281,22 +278,17 @@ class MainScreen(Screen):
             self.handle_delete_account()
         elif event.button.id == "update_marketing":
             self.app.push_screen(MarketingPreferenceScreen())
-        elif event.button.id == "load_more":
-            self.load_more_shows()
         elif event.button.id and event.button.id.startswith("genre_"):
             genre = event.button.id.replace("genre_", "")
             self.current_genre = genre
-            self.current_page = 1
             self.load_shows()
 
     def on_select_changed(self, event: Select.Changed) -> None:
         if event.select.id == "sort_select":
             self.current_sort = event.value
-            self.current_page = 1
             self.load_shows()
         elif event.select.id == "order_select":
             self.current_order = event.value
-            self.current_page = 1
             self.load_shows()
 
     def update_sidebar_buttons(self, active_button_id: str):
@@ -346,65 +338,56 @@ class MainScreen(Screen):
         
         # Check if this requires rental confirmation
         if "premium_button" in button.classes:
-            # Get show data from cache for modal
-            show = None
-            for cached_shows in self.shows_cache.values():
-                show = next((s for s in cached_shows.get("shows", []) if s["show_id"] == show_id), None)
-                if show:
-                    break
-            
+            # Simple rental confirmation for premium shows
             def handle_modal_result(result):
                 if result and result.get("action") == "rent":
                     self.handle_show_action_async(show_id, button)
             
-            if show:
-                self.app.push_screen(
-                    RentConfirmModal(show["name"], show.get("cost_to_rent", 0), show_id),
-                    handle_modal_result
-                )
+            # Extract cost from button text
+            cost_text = button.label.split("$")[1].split(")")[0] if "$" in button.label else "0.00"
+            cost = float(cost_text)
+            
+            self.app.push_screen(
+                RentConfirmModal("Premium Show", cost, show_id),
+                handle_modal_result
+            )
         else:
             self.handle_show_action_async(show_id, button)
 
     @work(exclusive=True)
-    async def load_shows_async(self, append: bool = False):
-        """Load shows asynchronously with caching and virtual scrolling"""
+    async def load_shows_async(self):
+        """Load shows asynchronously"""
         content = self.query_one("#content_area")
+        content.remove_children()
+        content.mount(LoadingIndicator())
         
-        if not append:
-            content.remove_children()
-            content.mount(LoadingIndicator())
+        # Get all shows
+        result = await asyncio.to_thread(self.app.call_api, "get_all_shows")
+        content.remove_children()
         
-        # Create cache key
-        cache_key = f"{self.current_sort}_{self.current_order}_{self.current_genre}_{self.current_page}"
-        
-        # Check cache first
-        if cache_key not in self.shows_cache:
-            result = await asyncio.to_thread(
-                self.app.call_api, "get_shows_paginated",
-                page=self.current_page, limit=20,
-                sort_by=self.current_sort, sort_order=self.current_order,
-                genre=self.current_genre if self.current_genre != "all" else ""
-            )
+        if result and result.get("success"):
+            data = result.get("data", {})
+            shows = data.get("shows", [])
             
-            if result and result.get("success"):
-                self.shows_cache[cache_key] = result.get("data", {})
-            else:
-                if not append:
-                    content.remove_children()
-                    content.mount(Static("Error loading shows", classes="error_message"))
-                return
-        
-        data = self.shows_cache[cache_key]
-        shows = data.get("shows", [])
-        pagination = data.get("pagination", {})
-        
-        if not append:
-            content.remove_children()
+            # Load genres for filter
+            genres_result = await asyncio.to_thread(self.app.call_api, "get_genres")
+            genres = genres_result.get("data", []) if genres_result and genres_result.get("success") else []
             
-            # Load genres for filter (cache these too)
-            if not hasattr(self, '_genres_cache'):
-                genres_result = await asyncio.to_thread(self.app.call_api, "get_genres")
-                self._genres_cache = genres_result.get("data", []) if genres_result and genres_result.get("success") else []
+            # Apply sorting
+            if self.current_sort == "name":
+                shows.sort(key=lambda x: x.get("name", ""), reverse=(self.current_order == "DESC"))
+            elif self.current_sort == "rating":
+                shows.sort(key=lambda x: float(x.get("rating", 0)), reverse=(self.current_order == "DESC"))
+            elif self.current_sort == "release_date":
+                shows.sort(key=lambda x: x.get("release_date", ""), reverse=(self.current_order == "DESC"))
+            elif self.current_sort == "genre":
+                shows.sort(key=lambda x: x.get("genre", ""), reverse=(self.current_order == "DESC"))
+            elif self.current_sort == "length":
+                shows.sort(key=lambda x: int(x.get("length", 0)), reverse=(self.current_order == "DESC"))
+            
+            # Apply genre filter
+            if self.current_genre != "all":
+                shows = [show for show in shows if show.get("genre") == self.current_genre]
             
             # Create header with controls
             controls = Container(
@@ -425,7 +408,7 @@ class MainScreen(Screen):
                 ),
                 ScrollableContainer(
                     Button("All", id="genre_all", variant="primary" if self.current_genre == "all" else "default", classes="genre_button"),
-                    *[Button(genre, id=f"genre_{genre}", variant="primary" if self.current_genre == genre else "default", classes="genre_button") for genre in self._genres_cache],
+                    *[Button(genre, id=f"genre_{genre}", variant="primary" if self.current_genre == genre else "default", classes="genre_button") for genre in genres],
                     classes="genre_filter"
                 ),
                 classes="controls_container"
@@ -433,35 +416,24 @@ class MainScreen(Screen):
             
             content.mount(Static("Available Shows", classes="content_title"))
             content.mount(controls)
-            content.mount(Container(id="shows_container", classes="shows_grid"))
-        
-        # Get user's shows for comparison
-        user_shows = self.app.current_user.get("shows", "").split(",") if self.app.current_user.get("shows") else []
-        user_show_ids = [int(x.strip()) for x in user_shows if x.strip()]
-        
-        shows_container = content.query_one("#shows_container")
-        
-        if shows:
-            for show in shows:
-                shows_container.mount(self.create_show_card(show, show["show_id"] in user_show_ids))
             
-            # Add load more button if there are more pages
-            if pagination.get("has_next"):
-                if content.query("#load_more"):
-                    content.query_one("#load_more").remove()
-                content.mount(Button("Load More", id="load_more", variant="primary", classes="load_more_button"))
-        elif not append and not shows:
-            content.mount(Static("No shows available", classes="empty_message"))
+            # Get user's shows for comparison
+            user_shows = self.app.current_user.get("shows", "").split(",") if self.app.current_user.get("shows") else []
+            user_show_ids = [int(x.strip()) for x in user_shows if x.strip()]
+            
+            if shows:
+                content.mount(ScrollableContainer(
+                    *[self.create_show_card(show, show["show_id"] in user_show_ids) for show in shows],
+                    classes="shows_grid"
+                ))
+            else:
+                content.mount(Static("No shows available", classes="empty_message"))
+        else:
+            content.mount(Static("Error loading shows", classes="error_message"))
 
     def load_shows(self) -> None:
-        """Load shows from beginning"""
-        self.current_page = 1
-        self.load_shows_async(append=False)
-
-    def load_more_shows(self) -> None:
-        """Load next page of shows"""
-        self.current_page += 1
-        self.load_shows_async(append=True)
+        """Load shows"""
+        self.load_shows_async()
 
     @work(exclusive=True)
     async def load_my_shows_async(self):
@@ -797,9 +769,8 @@ class EasyFlixUserApp(App):
     
     .login_container {
         align: center middle;
-        width: 80%;
-        height: auto;
-        min-height: 60%;
+        width: 100%;
+        height: 100%;
         background: #404040;
         border: solid #FF8C00;
         padding: 4;
@@ -813,8 +784,8 @@ class EasyFlixUserApp(App):
     
     .main_container {
         align: center middle;
-        width: 60%;
-        height: 70%;
+        width: 100%;
+        height: 100%;
         background: #404040;
         border: solid #FF8C00;
     }
@@ -1016,17 +987,6 @@ class EasyFlixUserApp(App):
         margin-top: 1;
     }
     
-    .load_more_button {
-        width: 100%;
-        margin: 2;
-        background: #FF8C00;
-    }
-    
-    .load_more_button:hover {
-        background: #FFB84D;
-        text-style: bold;
-    }
-    
     .account_info {
         padding: 2;
         background: #404040;
@@ -1054,7 +1014,7 @@ class EasyFlixUserApp(App):
     .loading_container {
         background: #404040;
         border: solid #FF8C00;
-        width: 50%;
+        width: 100%;
         height: auto;
         align: center middle;
         padding: 2;
@@ -1070,7 +1030,7 @@ class EasyFlixUserApp(App):
     .modal_container {
         background: #404040;
         border: solid #FF8C00;
-        width: 50%;
+        width: 100%;
         height: auto;
         align: center middle;
         padding: 2;
