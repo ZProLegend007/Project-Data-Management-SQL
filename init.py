@@ -69,7 +69,7 @@ class DatabaseInitialiser:
         conn = self._create_connection()
         cursor = conn.cursor()
         
-        # CUSTOMERS table
+        # CUSTOMERS table with Marketing_Opt_In column
         cursor.execute('''
         CREATE TABLE IF NOT EXISTS CUSTOMERS (
             User_ID INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -81,7 +81,8 @@ class DatabaseInitialiser:
             Shows TEXT,
             Rentals TEXT,
             Total_Spent DECIMAL(10,2) DEFAULT 0.00,
-            Favourite_Genre VARCHAR(30)
+            Favourite_Genre VARCHAR(30),
+            Marketing_Opt_In BOOLEAN DEFAULT 0
         )
         ''')
         
