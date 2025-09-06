@@ -14,7 +14,7 @@ from textual.widgets import Button, Input, Label, Select, Static, Header, Footer
 from textual.screen import Screen, ModalScreen
 from textual.binding import Binding
 from textual.reactive import reactive
-from textual import work
+from textual.worker import work
 from typing import Dict, List, Optional, Any
 
 class LoadingScreen(ModalScreen):
@@ -31,6 +31,54 @@ class LoadingScreen(ModalScreen):
             classes="loading_container"
         )
 
+class SearchModal(ModalScreen):
+    """Modal for advanced search functionality"""
+    
+    def compose(self) -> ComposeResult:
+        yield Container(
+            Static("Advanced Search", classes="modal_title"),
+            Container(
+                Label("Genre:"),
+                Input(placeholder="Enter genre (e.g., Action, Comedy)", id="search_genre"),
+                Label("Rating:"),
+                Input(placeholder="Enter rating (e.g., PG-13, R)", id="search_rating"),
+                Label("Year:"),
+                Input(placeholder="Enter year (e.g., 2023)", id="search_year"),
+                Horizontal(
+                    Button("Search", id="perform_search", variant="primary"),
+                    Button("Clear", id="clear_search", variant="default"),
+                    Button("Cancel", id="cancel_search", variant="default"),
+                    classes="modal_buttons"
+                ),
+                classes="search_form"
+            ),
+            classes="modal_container"
+        )
+    
+    def on_button_pressed(self, event: Button.Pressed) -> None:
+        if event.button.id == "perform_search":
+            genre = self.query_one("#search_genre", Input).value.strip()
+            rating = self.query_one("#search_rating", Input).value.strip()
+            year_str = self.query_one("#search_year", Input).value.strip()
+            
+            year = None
+            if year_str:
+                try:
+                    year = int(year_str)
+                except ValueError:
+                    pass
+            
+            self.dismiss({
+                "action": "search",
+                "genre": genre if genre else None,
+                "rating": rating if rating else None,
+                "year": year
+            })
+        elif event.button.id == "clear_search":
+            self.dismiss({"action": "clear"})
+        else:
+            self.dismiss(None)
+
 class RentConfirmModal(ModalScreen):
     """Modal for confirming premium show rental"""
     
@@ -42,12 +90,12 @@ class RentConfirmModal(ModalScreen):
     
     def compose(self) -> ComposeResult:
         yield Container(
-            Static(f"Rent Premium Show", classes="modal_title"),
+            Static(f"Buy Premium Show", classes="modal_title"),
             Static(f"Show: {self.show_name}", classes="modal_text"),
             Static(f"Cost: ${self.cost:.2f}", classes="modal_text"),
-            Static("Would you like to rent this premium show?", classes="modal_text"),
+            Static("Would you like to buy this premium show?", classes="modal_text"),
             Horizontal(
-                Button("Rent Show", id="confirm_rent", variant="primary"),
+                Button("Buy Show", id="confirm_rent", variant="primary"),
                 Button("Cancel", id="cancel_rent", variant="default"),
                 classes="modal_buttons"
             ),
@@ -57,6 +105,33 @@ class RentConfirmModal(ModalScreen):
     def on_button_pressed(self, event: Button.Pressed) -> None:
         if event.button.id == "confirm_rent":
             self.dismiss({"action": "rent", "show_id": self.show_id})
+        else:
+            self.dismiss(None)
+
+class RemoveConfirmModal(ModalScreen):
+    """Modal for confirming show removal"""
+    
+    def __init__(self, show_name: str, show_id: int):
+        super().__init__()
+        self.show_name = show_name
+        self.show_id = show_id
+    
+    def compose(self) -> ComposeResult:
+        yield Container(
+            Static(f"Remove Show", classes="modal_title"),
+            Static(f"Show: {self.show_name}", classes="modal_text"),
+            Static("Are you sure you want to remove this show from your collection?", classes="modal_text"),
+            Horizontal(
+                Button("Remove", id="confirm_remove", variant="error"),
+                Button("Cancel", id="cancel_remove", variant="default"),
+                classes="modal_buttons"
+            ),
+            classes="modal_container"
+        )
+    
+    def on_button_pressed(self, event: Button.Pressed) -> None:
+        if event.button.id == "confirm_remove":
+            self.dismiss({"action": "remove", "show_id": self.show_id})
         else:
             self.dismiss(None)
 
@@ -150,7 +225,7 @@ class CreateAccountScreen(Screen):
                 Label("Password:"),
                 Input(placeholder="Enter password", password=True, id="password"),
                 Label("Subscription Level:"),
-                Select([("Basic", "Basic"), ("Premium", "Premium")], id="subscription"),
+                Select([("Basic - $30", "Basic"), ("Premium - $80", "Premium")], id="subscription"),
                 Checkbox("I agree to receive marketing communications", id="marketing_checkbox"),
                 Horizontal(
                     Button("Create Account", id="submit", variant="primary"),
@@ -172,7 +247,8 @@ class CreateAccountScreen(Screen):
             subscription_level=subscription, marketing_opt_in=marketing_opt_in
         )
         if result and result.get("success"):
-            self.notify("Account created successfully! Please log in.", severity="information")
+            charged = result.get("data", {}).get("charged", 0)
+            self.notify(f"Account created successfully! Charged: ${charged:.2f}. Please log in.", severity="information")
             self.app.pop_screen()
         else:
             self.notify("Account creation failed: " + result.get("message", "Unknown error"), severity="error")
@@ -199,6 +275,7 @@ class MainScreen(Screen):
     """Main application screen"""
     
     current_view = reactive("shows")
+    current_search_filters = {}
     
     def compose(self) -> ComposeResult:
         yield Header()
@@ -238,15 +315,30 @@ class MainScreen(Screen):
         elif event.button.id == "logout_btn":
             self.app.current_user = None
             self.app.pop_screen()
+        elif event.button.id == "search_shows":
+            self.app.push_screen(SearchModal(), self.handle_search_result)
         elif event.button.id and event.button.id.startswith("add_show_"):
             show_id = int(event.button.id.replace("add_show_", ""))
             self.handle_show_action(show_id)
+        elif event.button.id and event.button.id.startswith("remove_show_"):
+            show_id = int(event.button.id.replace("remove_show_", ""))
+            self.handle_remove_show(show_id)
         elif event.button.id == "change_password":
             self.app.push_screen(ChangePasswordScreen())
         elif event.button.id == "change_subscription":
             self.app.push_screen(ChangeSubscriptionScreen())
         elif event.button.id == "update_marketing":
             self.app.push_screen(MarketingPreferenceScreen())
+
+    def handle_search_result(self, result):
+        """Handle search modal result"""
+        if result:
+            if result.get("action") == "search":
+                self.current_search_filters = {k: v for k, v in result.items() if k != "action" and v is not None}
+                self.load_shows()
+            elif result.get("action") == "clear":
+                self.current_search_filters = {}
+                self.load_shows()
 
     def update_sidebar_buttons(self, active_button_id: str):
         """Update sidebar button styles"""
@@ -261,7 +353,11 @@ class MainScreen(Screen):
     @work(exclusive=True)
     async def handle_show_action_async(self, show_id: int):
         """Handle show action asynchronously"""
-        shows_result = await asyncio.to_thread(self.app.call_api, "get_all_shows")
+        if self.current_search_filters:
+            shows_result = await asyncio.to_thread(self.app.call_api, "search_shows", **self.current_search_filters)
+        else:
+            shows_result = await asyncio.to_thread(self.app.call_api, "get_all_shows")
+            
         if shows_result and shows_result.get("success"):
             shows = shows_result.get("data", [])
             show = next((s for s in shows if s["show_id"] == show_id), None)
@@ -285,6 +381,28 @@ class MainScreen(Screen):
     def handle_show_action(self, show_id: int) -> None:
         """Handle show action (add or rent)"""
         self.handle_show_action_async(show_id)
+
+    @work(exclusive=True)
+    async def handle_remove_show_async(self, show_id: int):
+        """Handle show removal asynchronously"""
+        user_shows_result = await asyncio.to_thread(self.app.call_api, "get_user_shows", user_id=self.app.current_user.get("user_id"))
+        if user_shows_result and user_shows_result.get("success"):
+            shows = user_shows_result.get("data", [])
+            show = next((s for s in shows if s["show_id"] == show_id), None)
+            
+            if show:
+                def handle_modal_result(result):
+                    if result and result.get("action") == "remove":
+                        self.remove_show_from_user(show_id)
+                
+                self.app.push_screen(
+                    RemoveConfirmModal(show["show_name"], show_id),
+                    handle_modal_result
+                )
+
+    def handle_remove_show(self, show_id: int) -> None:
+        """Handle show removal"""
+        self.handle_remove_show_async(show_id)
 
     @work(exclusive=True)
     async def add_show_to_user(self, show_id: int):
@@ -314,13 +432,44 @@ class MainScreen(Screen):
             self.notify("Failed to add show: " + result.get("message", "Unknown error"), severity="error")
 
     @work(exclusive=True)
+    async def remove_show_from_user(self, show_id: int):
+        """Remove show from user's collection asynchronously"""
+        loading = LoadingScreen("Removing show...")
+        self.app.push_screen(loading)
+        
+        user_id = self.app.current_user.get("user_id")
+        result = await asyncio.to_thread(
+            self.app.call_api, "remove_show_from_user", 
+            user_id=user_id, show_id=show_id
+        )
+        
+        self.app.pop_screen()
+        
+        if result and result.get("success"):
+            self.notify("Show removed successfully!", severity="information")
+            user_info_result = await asyncio.to_thread(
+                self.app.call_api, "get_user_info", user_id=user_id
+            )
+            if user_info_result and user_info_result.get("success"):
+                self.app.current_user.update(user_info_result.get("data", {}))
+            
+            if self.current_view == "my_shows":
+                self.load_my_shows()
+        else:
+            self.notify("Failed to remove show: " + result.get("message", "Unknown error"), severity="error")
+
+    @work(exclusive=True)
     async def load_shows_async(self):
         """Load shows asynchronously"""
         content = self.query_one("#content_area")
         content.remove_children()
         content.mount(LoadingIndicator())
         
-        result = await asyncio.to_thread(self.app.call_api, "get_all_shows")
+        if self.current_search_filters:
+            result = await asyncio.to_thread(self.app.call_api, "search_shows", **self.current_search_filters)
+        else:
+            result = await asyncio.to_thread(self.app.call_api, "get_all_shows")
+            
         content.remove_children()
         
         if result and result.get("success"):
@@ -328,14 +477,17 @@ class MainScreen(Screen):
             user_shows = self.app.current_user.get("shows", "").split(",") if self.app.current_user.get("shows") else []
             user_show_ids = [int(x.strip()) for x in user_shows if x.strip()]
             
-            content.mount(Static("Available Shows", classes="content_title"))
+            title = "Search Results" if self.current_search_filters else "Available Shows"
+            content.mount(Static(title, classes="content_title"))
+            content.mount(Button("Advanced Search", id="search_shows", variant="warning", classes="search_button"))
+            
             if shows:
                 content.mount(ScrollableContainer(
                     *[self.create_show_card(show, show["show_id"] in user_show_ids) for show in shows],
                     classes="shows_grid"
                 ))
             else:
-                content.mount(Static("No shows available", classes="empty_message"))
+                content.mount(Static("No shows found", classes="empty_message"))
         else:
             content.mount(Static("Error loading shows", classes="error_message"))
 
@@ -404,7 +556,7 @@ class MainScreen(Screen):
             button_classes = "disabled_button"
             button_disabled = True
         elif is_premium and user_subscription == "Basic":
-            button_text = f"Rent (${show.get('cost_to_rent', 0):.2f})"
+            button_text = f"Buy (${show.get('cost_to_rent', 0):.2f})"
             button_variant = "warning"
             button_classes = "premium_button"
             button_disabled = False
@@ -430,7 +582,7 @@ class MainScreen(Screen):
         return Container(
             Static(show.get("name", "Unknown"), classes="show_title"),
             Static(f"Genre: {show.get('genre', 'N/A')}", classes="show_info"),
-            Static(f"Rating: {show.get('rating', 'N/A')}/10", classes="show_info"),
+            Static(f"Rating: {show.get('rating', 'N/A')}", classes="show_info"),
             Static(f"Director: {show.get('director', 'N/A')}", classes="show_info"),
             Static(f"Length: {show.get('length', 'N/A')} min", classes="show_info"),
             Static(f"Release: {show.get('release_date', 'N/A')}", classes="show_info"),
@@ -443,11 +595,12 @@ class MainScreen(Screen):
         return Container(
             Static(show.get("show_name", "Unknown"), classes="show_title"),
             Static(f"Genre: {show.get('genre', 'N/A')}", classes="show_info"),
-            Static(f"Rating: {show.get('rating', 'N/A')}/10", classes="show_info"),
+            Static(f"Rating: {show.get('rating', 'N/A')}", classes="show_info"),
             Static(f"Director: {show.get('director', 'N/A')}", classes="show_info"),
             Static(f"Length: {show.get('length', 'N/A')} min", classes="show_info"),
             Static(f"Release: {show.get('release_date', 'N/A')}", classes="show_info"),
             Static("✓ In Your Collection", classes="owned_status"),
+            Button("Remove", id=f"remove_show_{show.get('show_id')}", variant="error", classes="remove_button"),
             classes="show_card owned_card"
         )
 
@@ -573,7 +726,8 @@ class ChangeSubscriptionScreen(Screen):
                 Label("Current Subscription:"),
                 Static(f"{self.app.current_user.get('subscription_level', 'Unknown')}", classes="current_sub"),
                 Label("New Subscription Level:"),
-                Select([("Basic", "Basic"), ("Premium", "Premium")], id="subscription"),
+                Select([("Basic - $30", "Basic"), ("Premium - $80", "Premium")], id="subscription"),
+                Static("Note: Premium to Basic is free, Basic to Premium costs $80", classes="pricing_note"),
                 Horizontal(
                     Button("Update Subscription", id="submit", variant="primary"),
                     Button("Cancel", id="cancel", variant="default"),
@@ -602,7 +756,11 @@ class ChangeSubscriptionScreen(Screen):
             if user_info_result and user_info_result.get("success"):
                 self.app.current_user.update(user_info_result.get("data", {}))
             
-            self.notify("Subscription updated successfully!", severity="information")
+            charged = result.get("data", {}).get("charged", 0)
+            if charged > 0:
+                self.notify(f"Subscription updated successfully! Charged: ${charged:.2f}", severity="information")
+            else:
+                self.notify("Subscription updated successfully!", severity="information")
             self.app.pop_screen()
             
             # Force reload of the account view if it's currently displayed
@@ -633,6 +791,8 @@ class EasyFlixUserApp(App):
     Screen {
         background: #2F2F2F;
         color: white;
+        width: 100%;
+        height: 100%;
     }
     
     .title {
@@ -652,9 +812,8 @@ class EasyFlixUserApp(App):
     
     .login_container {
         align: center middle;
-        width: 80%;
-        height: auto;
-        min-height: 60%;
+        width: 100%;
+        height: 100%;
         background: #404040;
         border: solid #FF8C00;
         padding: 4;
@@ -668,8 +827,8 @@ class EasyFlixUserApp(App):
     
     .main_container {
         align: center middle;
-        width: 60%;
-        height: 70%;
+        width: 100%;
+        height: 100%;
         background: #404040;
         border: solid #FF8C00;
     }
@@ -677,6 +836,13 @@ class EasyFlixUserApp(App):
     .form_container {
         padding: 2;
         height: auto;
+        width: 100%;
+    }
+    
+    .search_form {
+        padding: 2;
+        height: auto;
+        width: 100%;
     }
     
     .button_row {
@@ -685,10 +851,17 @@ class EasyFlixUserApp(App):
         align: center middle;
     }
     
+    .pricing_note {
+        color: #FFD700;
+        margin: 1;
+        text-style: italic;
+    }
+    
     Input {
         margin: 1;
         background: #2F2F2F;
         border: solid #696969;
+        width: 100%;
     }
     
     Input:focus {
@@ -704,6 +877,7 @@ class EasyFlixUserApp(App):
         margin: 1;
         background: #2F2F2F;
         border: solid #696969;
+        width: 100%;
     }
     
     Checkbox {
@@ -719,6 +893,7 @@ class EasyFlixUserApp(App):
     
     .main_layout {
         height: 100%;
+        width: 100%;
     }
     
     .sidebar {
@@ -728,6 +903,7 @@ class EasyFlixUserApp(App):
         border-right: solid #FF8C00;
         align: center top;
         text-align: center;
+        height: 100%;
     }
     
     .sidebar_button {
@@ -754,10 +930,17 @@ class EasyFlixUserApp(App):
     .content {
         width: 80%;
         padding: 1;
+        height: 100%;
+    }
+    
+    .search_button {
+        margin: 1;
+        width: auto;
     }
     
     .shows_grid {
         height: 100%;
+        width: 100%;
     }
     
     .show_card {
@@ -766,6 +949,7 @@ class EasyFlixUserApp(App):
         margin: 1;
         padding: 1;
         height: auto;
+        width: 100%;
     }
     
     .basic_card {
@@ -836,11 +1020,23 @@ class EasyFlixUserApp(App):
         margin-top: 1;
     }
     
+    .remove_button {
+        background: #DC143C;
+        margin-top: 1;
+        width: 100%;
+    }
+    
+    .remove_button:hover {
+        background: #FF6B6B;
+        border: solid #FF0000;
+    }
+    
     .account_info {
         padding: 2;
         background: #404040;
         border: solid #FF8C00;
         margin: 2;
+        width: 100%;
     }
     
     .info_item {
@@ -879,7 +1075,7 @@ class EasyFlixUserApp(App):
     .modal_container {
         background: #404040;
         border: solid #FF8C00;
-        width: 50%;
+        width: 60%;
         height: auto;
         align: center middle;
         padding: 2;
