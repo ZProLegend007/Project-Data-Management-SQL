@@ -79,7 +79,7 @@ class DatabaseInitialiser:
             Salt VARCHAR(32) NOT NULL,
             Subscription_Level VARCHAR(20) NOT NULL CHECK (Subscription_Level IN ('Basic', 'Premium')),
             Shows TEXT,
-            Rentals TEXT,
+            Buys TEXT,
             Total_Spent DECIMAL(10,2) DEFAULT 0.00,
             Favourite_Genre VARCHAR(30),
             Marketing_Opt_In BOOLEAN DEFAULT 0
@@ -101,13 +101,13 @@ class DatabaseInitialiser:
         )
         ''')
         
-        # RENTALS table
+        # BUYS table (renamed from RENTALS)
         cursor.execute('''
-        CREATE TABLE IF NOT EXISTS RENTALS (
-            Rental_ID INTEGER PRIMARY KEY AUTOINCREMENT,
+        CREATE TABLE IF NOT EXISTS BUYS (
+            Buy_ID INTEGER PRIMARY KEY AUTOINCREMENT,
             User_ID INTEGER NOT NULL,
             Show_ID INTEGER NOT NULL,
-            Rental_Date DATE NOT NULL,
+            Buy_Date DATE NOT NULL,
             Return_Date DATE,
             Expired BOOLEAN DEFAULT FALSE,
             Cost DECIMAL(5,2) NOT NULL,
@@ -120,7 +120,7 @@ class DatabaseInitialiser:
         cursor.execute('''
         CREATE TABLE IF NOT EXISTS STATISTICS (
             Date DATE PRIMARY KEY,
-            Total_Shows_Rented INTEGER DEFAULT 0,
+            Total_Shows_Bought INTEGER DEFAULT 0,
             Total_Subscriptions INTEGER DEFAULT 0,
             Total_Users INTEGER DEFAULT 0,
             Last_Updated DATETIME NOT NULL
@@ -131,7 +131,7 @@ class DatabaseInitialiser:
         cursor.execute('''
         CREATE TABLE IF NOT EXISTS FINANCIALS (
             Date DATE PRIMARY KEY,
-            Total_Revenue_Rent DECIMAL(10,2) DEFAULT 0.00,
+            Total_Revenue_Buys DECIMAL(10,2) DEFAULT 0.00,
             Total_Revenue_Subscriptions DECIMAL(10,2) DEFAULT 0.00,
             Total_Combined_Revenue DECIMAL(10,2) DEFAULT 0.00,
             Last_Updated DATETIME NOT NULL
@@ -432,14 +432,14 @@ class DatabaseInitialiser:
         # Initialise statistics
         cursor.execute('''
         INSERT OR REPLACE INTO STATISTICS 
-        (Date, Total_Shows_Rented, Total_Subscriptions, Total_Users, Last_Updated)
+        (Date, Total_Shows_Bought, Total_Subscriptions, Total_Users, Last_Updated)
         VALUES (?, 0, 0, 0, ?)
         ''', (today, now))
         
         # Initialise financials
         cursor.execute('''
         INSERT OR REPLACE INTO FINANCIALS 
-        (Date, Total_Revenue_Rent, Total_Revenue_Subscriptions, Total_Combined_Revenue, Last_Updated)
+        (Date, Total_Revenue_Buys, Total_Revenue_Subscriptions, Total_Combined_Revenue, Last_Updated)
         VALUES (?, 0.00, 0.00, 0.00, ?)
         ''', (today, now))
         
@@ -468,6 +468,8 @@ class DatabaseInitApp(App):
     CSS = """
     Screen {
         background: #0f1419;
+        width: 100%;
+        height: 100%;
     }
     
     Header {
@@ -487,6 +489,8 @@ class DatabaseInitApp(App):
         border-title-color: #f5f5f5;
         padding: 2;
         margin: 2;
+        width: 100%;
+        height: 100%;
     }
     
     .status {
