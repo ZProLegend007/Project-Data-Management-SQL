@@ -14,7 +14,7 @@ from textual.widgets import Button, Input, Label, Select, Static, Header, Footer
 from textual.screen import Screen, ModalScreen
 from textual.binding import Binding
 from textual.reactive import reactive
-from textual.worker import work
+from textual import work
 from typing import Dict, List, Optional, Any
 
 class LoadingScreen(ModalScreen):
