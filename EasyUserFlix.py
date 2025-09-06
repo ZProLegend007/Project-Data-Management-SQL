@@ -9,8 +9,8 @@ import sys
 import os
 import asyncio
 from textual.app import App, ComposeResult
-from textual.containers import Container, Horizontal, Vertical, ScrollableContainer
-from textual.widgets import Button, Input, Label, Select, Static, Header, Footer, LoadingIndicator
+from textual.containers import Container, Horizontal, Vertical, ScrollableContainer, Center, Middle
+from textual.widgets import Button, Input, Label, Select, Static, Header, Footer, LoadingIndicator, Checkbox
 from textual.screen import Screen, ModalScreen
 from textual.binding import Binding
 from textual.reactive import reactive
@@ -151,6 +151,7 @@ class CreateAccountScreen(Screen):
                 Input(placeholder="Enter password", password=True, id="password"),
                 Label("Subscription Level:"),
                 Select([("Basic", "Basic"), ("Premium", "Premium")], id="subscription"),
+                Checkbox("I agree to receive marketing communications", id="marketing_checkbox"),
                 Horizontal(
                     Button("Create Account", id="submit", variant="primary"),
                     Button("Back", id="back", variant="default"),
@@ -163,11 +164,12 @@ class CreateAccountScreen(Screen):
         yield Footer()
 
     @work(exclusive=True)
-    async def create_user_account(self, username: str, email: str, password: str, subscription: str):
+    async def create_user_account(self, username: str, email: str, password: str, subscription: str, marketing_opt_in: bool):
         """Create user account asynchronously"""
         result = await asyncio.to_thread(
             self.app.call_api, "create_user",
-            username=username, email=email, password=password, subscription_level=subscription
+            username=username, email=email, password=password, 
+            subscription_level=subscription, marketing_opt_in=marketing_opt_in
         )
         if result and result.get("success"):
             self.notify("Account created successfully! Please log in.", severity="information")
@@ -181,11 +183,12 @@ class CreateAccountScreen(Screen):
             email = self.query_one("#email", Input).value
             password = self.query_one("#password", Input).value
             subscription = self.query_one("#subscription", Select).value
+            marketing_opt_in = self.query_one("#marketing_checkbox", Checkbox).value
             
             if all([username, email, password, subscription]):
                 loading = LoadingScreen("Creating account...")
                 self.app.push_screen(loading)
-                self.create_user_account(username, email, password, subscription)
+                self.create_user_account(username, email, password, subscription, marketing_opt_in)
                 self.app.pop_screen()
             else:
                 self.notify("Please fill in all fields", severity="warning")
@@ -242,6 +245,8 @@ class MainScreen(Screen):
             self.app.push_screen(ChangePasswordScreen())
         elif event.button.id == "change_subscription":
             self.app.push_screen(ChangeSubscriptionScreen())
+        elif event.button.id == "update_marketing":
+            self.app.push_screen(MarketingPreferenceScreen())
 
     def update_sidebar_buttons(self, active_button_id: str):
         """Update sidebar button styles"""
@@ -381,8 +386,10 @@ class MainScreen(Screen):
             Static(f"Subscription: {user.get('subscription_level', 'N/A')}", classes="info_item"),
             Static(f"Total Spent: ${user.get('total_spent', 0):.2f}", classes="info_item"),
             Static(f"Favourite Genre: {user.get('favourite_genre', 'Not set')}", classes="info_item"),
+            Static(f"Marketing Opt-in: {'Yes' if user.get('marketing_opt_in', False) else 'No'}", classes="info_item"),
             Button("Change Password", id="change_password", variant="default"),
             Button("Change Subscription", id="change_subscription", variant="primary"),
+            Button("Update Marketing Preference", id="update_marketing", variant="default"),
             classes="account_info"
         ))
 
@@ -500,6 +507,61 @@ class ChangePasswordScreen(Screen):
         elif event.button.id == "cancel":
             self.app.pop_screen()
 
+class MarketingPreferenceScreen(Screen):
+    """Marketing preference screen"""
+    
+    def compose(self) -> ComposeResult:
+        yield Header()
+        yield Container(
+            Static("Marketing Preferences", classes="title"),
+            Container(
+                Label("Current Setting:"),
+                Static(f"{'Opted In' if self.app.current_user.get('marketing_opt_in', False) else 'Opted Out'}", classes="current_sub"),
+                Checkbox("I agree to receive marketing communications", 
+                        id="marketing_checkbox", 
+                        value=self.app.current_user.get('marketing_opt_in', False)),
+                Horizontal(
+                    Button("Update Preference", id="submit", variant="primary"),
+                    Button("Cancel", id="cancel", variant="default"),
+                    classes="button_row"
+                ),
+                classes="form_container"
+            ),
+            classes="main_container"
+        )
+        yield Footer()
+
+    @work(exclusive=True)
+    async def update_marketing_preference_async(self, marketing_opt_in: bool):
+        """Update marketing preference asynchronously"""
+        user_id = self.app.current_user.get("user_id")
+        result = await asyncio.to_thread(
+            self.app.call_api, "update_marketing_opt_in", 
+            user_id=user_id, marketing_opt_in=marketing_opt_in
+        )
+        
+        if result and result.get("success"):
+            self.app.current_user["marketing_opt_in"] = marketing_opt_in
+            self.notify("Marketing preference updated successfully!", severity="information")
+            self.app.pop_screen()
+            
+            # Reload account page
+            main_screen = self.app.screen_stack[-1]
+            if hasattr(main_screen, 'load_account') and main_screen.current_view == "account":
+                main_screen.load_account()
+        else:
+            self.notify("Failed to update preference: " + result.get("message", "Unknown error"), severity="error")
+
+    def on_button_pressed(self, event: Button.Pressed) -> None:
+        if event.button.id == "submit":
+            marketing_opt_in = self.query_one("#marketing_checkbox", Checkbox).value
+            loading = LoadingScreen("Updating preference...")
+            self.app.push_screen(loading)
+            self.update_marketing_preference_async(marketing_opt_in)
+            self.app.pop_screen()
+        elif event.button.id == "cancel":
+            self.app.pop_screen()
+
 class ChangeSubscriptionScreen(Screen):
     """Change subscription screen"""
     
@@ -533,8 +595,7 @@ class ChangeSubscriptionScreen(Screen):
         )
         
         if result and result.get("success"):
-            self.app.current_user["subscription_level"] = subscription
-            
+            # Update user data immediately
             user_info_result = await asyncio.to_thread(
                 self.app.call_api, "get_user_info", user_id=user_id
             )
@@ -543,6 +604,11 @@ class ChangeSubscriptionScreen(Screen):
             
             self.notify("Subscription updated successfully!", severity="information")
             self.app.pop_screen()
+            
+            # Force reload of the account view if it's currently displayed
+            main_screen = self.app.screen_stack[-1]
+            if hasattr(main_screen, 'load_account') and main_screen.current_view == "account":
+                main_screen.load_account()
         else:
             self.notify("Failed to update subscription: " + result.get("message", "Unknown error"), severity="error")
 
@@ -616,6 +682,7 @@ class EasyFlixUserApp(App):
     .button_row {
         margin-top: 2;
         height: auto;
+        align: center middle;
     }
     
     Input {
@@ -639,6 +706,11 @@ class EasyFlixUserApp(App):
         border: solid #696969;
     }
     
+    Checkbox {
+        margin: 1;
+        color: white;
+    }
+    
     .current_sub {
         margin: 1;
         color: #FF8C00;
@@ -655,12 +727,15 @@ class EasyFlixUserApp(App):
         padding: 1;
         border-right: solid #FF8C00;
         align: center top;
+        text-align: center;
     }
     
     .sidebar_button {
         width: 90%;
         margin: 1;
         height: 3;
+        text-align: center;
+        content-align: center middle;
     }
     
     .sidebar_button:hover {
@@ -912,7 +987,11 @@ class EasyFlixUserApp(App):
             cmd = [sys.executable, "EFAPI.py", "--command", command]
             
             for key, value in kwargs.items():
-                cmd.extend([f"--{key}", str(value)])
+                if isinstance(value, bool):
+                    if value:
+                        cmd.append(f"--{key}")
+                else:
+                    cmd.extend([f"--{key}", str(value)])
             
             result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
             
