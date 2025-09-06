@@ -861,8 +861,8 @@ class EasyFlixUserApp(App):
     Screen {
         background: #2F2F2F;
         color: white;
-        width: 100%;
-        height: 100%;
+        width: 100vw;
+        height: 100vh;
     }
     
     .title {
@@ -882,8 +882,8 @@ class EasyFlixUserApp(App):
     
     .login_container {
         align: center middle;
-        width: 100%;
-        height: 100%;
+        width: 100vw;
+        height: 100vh;
         background: #404040;
         border: solid #FF8C00;
         padding: 4;
@@ -893,26 +893,30 @@ class EasyFlixUserApp(App):
         align: center middle;
         height: auto;
         margin: 2;
+        width: 100%;
     }
     
     .main_container {
         align: center middle;
-        width: 100%;
-        height: 100%;
+        width: 100vw;
+        height: 100vh;
         background: #404040;
         border: solid #FF8C00;
+        padding: 2;
     }
     
     .form_container {
         padding: 2;
         height: auto;
         width: 100%;
+        max-width: 400;
     }
     
     .button_row {
         margin-top: 2;
         height: auto;
         align: center middle;
+        width: 100%;
     }
     
     .pricing_note {
@@ -956,8 +960,8 @@ class EasyFlixUserApp(App):
     }
     
     .main_layout {
-        height: 100%;
-        width: 100%;
+        height: 100vh;
+        width: 100vw;
     }
     
     .sidebar {
@@ -967,7 +971,7 @@ class EasyFlixUserApp(App):
         border-right: solid #FF8C00;
         align: center top;
         text-align: center;
-        height: 100%;
+        height: 100vh;
     }
     
     .sidebar_button {
@@ -994,7 +998,7 @@ class EasyFlixUserApp(App):
     .content {
         width: 80%;
         padding: 1;
-        height: 100%;
+        height: 100vh;
     }
     
     .filter_container {
@@ -1003,6 +1007,7 @@ class EasyFlixUserApp(App):
         padding: 1;
         margin: 1;
         height: auto;
+        width: 100%;
     }
     
     .filter_label {
@@ -1017,7 +1022,7 @@ class EasyFlixUserApp(App):
     }
     
     .search_input {
-        width: 20%;
+        width: 25%;
         margin: 0 1 0 0;
     }
     
@@ -1031,7 +1036,7 @@ class EasyFlixUserApp(App):
     }
     
     .shows_scroll {
-        height: 100%;
+        height: 80vh;
         width: 100%;
     }
     
@@ -1040,9 +1045,8 @@ class EasyFlixUserApp(App):
         border: solid #696969;
         margin: 1;
         padding: 1;
-        height: auto;
-        width: auto;
-        min-height: 200px;
+        height: 15;
+        width: 100%;
     }
     
     .basic_card {
@@ -1068,7 +1072,6 @@ class EasyFlixUserApp(App):
     .show_info {
         color: white;
         margin: 0 0 0 1;
-        font-size: 90%;
     }
     
     .owned_status {
@@ -1158,10 +1161,10 @@ class EasyFlixUserApp(App):
     .loading_container {
         background: #404040;
         border: solid #FF8C00;
-        width: 50%;
+        width: 80%;
         height: auto;
         align: center middle;
-        padding: 2;
+        padding: 4;
     }
     
     .loading_text {
@@ -1174,8 +1177,8 @@ class EasyFlixUserApp(App):
     .modal_container {
         background: #404040;
         border: solid #FF8C00;
-        width: 100%;
-        height: 100%;
+        width: 100vw;
+        height: 100vh;
         align: center middle;
         padding: 2;
     }
