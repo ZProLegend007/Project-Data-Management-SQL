@@ -64,7 +64,7 @@ class EFAPI_Commands:
             cursor = conn.cursor()
             
             cursor.execute("""
-                SELECT User_ID, Password_Hash, Salt, Username, Email, Subscription_Level, Total_Spent, Favourite_Genre, Shows
+                SELECT User_ID, Password_Hash, Salt, Username, Email, Subscription_Level, Total_Spent, Favourite_Genre, Shows, Marketing_Opt_In
                 FROM CUSTOMERS 
                 WHERE Username = ?
             """, (username,))
@@ -73,7 +73,7 @@ class EFAPI_Commands:
             conn.close()
             
             if result:
-                user_id, stored_hash, salt, username, email, subscription_level, total_spent, favourite_genre, shows = result
+                user_id, stored_hash, salt, username, email, subscription_level, total_spent, favourite_genre, shows, marketing_opt_in = result
                 input_hash = self._hash_password(password, salt)
                 
                 if input_hash == stored_hash:
@@ -84,7 +84,8 @@ class EFAPI_Commands:
                         "subscription_level": subscription_level,
                         "total_spent": total_spent,
                         "favourite_genre": favourite_genre,
-                        "shows": shows or ""
+                        "shows": shows or "",
+                        "marketing_opt_in": bool(marketing_opt_in)
                     }
                     return self._format_response(True, user_data, "Authentication successful")
                 else:
@@ -95,7 +96,7 @@ class EFAPI_Commands:
         except Exception as e:
             return self._format_response(False, message=f"Authentication error: {e}")
     
-    def create_user(self, username: str, email: str, password: str, subscription_level: str) -> str:
+    def create_user(self, username: str, email: str, password: str, subscription_level: str, marketing_opt_in: bool = False) -> str:
         """Create new user account"""
         try:
             conn = self._get_connection()
@@ -114,9 +115,9 @@ class EFAPI_Commands:
             password_hash = self._hash_password(password, salt)
             
             cursor.execute("""
-                INSERT INTO CUSTOMERS (Username, Email, Password_Hash, Salt, Subscription_Level, Total_Spent, Favourite_Genre, Shows)
-                VALUES (?, ?, ?, ?, ?, 0.00, '', '')
-            """, (username, email, password_hash, salt, subscription_level))
+                INSERT INTO CUSTOMERS (Username, Email, Password_Hash, Salt, Subscription_Level, Total_Spent, Favourite_Genre, Shows, Marketing_Opt_In)
+                VALUES (?, ?, ?, ?, ?, 0.00, '', '', ?)
+            """, (username, email, password_hash, salt, subscription_level, marketing_opt_in))
             
             user_id = cursor.lastrowid
             conn.commit()
@@ -201,7 +202,7 @@ class EFAPI_Commands:
             cursor = conn.cursor()
             
             cursor.execute("""
-                SELECT User_ID, Username, Email, Subscription_Level, Total_Spent, Favourite_Genre, Shows
+                SELECT User_ID, Username, Email, Subscription_Level, Total_Spent, Favourite_Genre, Shows, Marketing_Opt_In
                 FROM CUSTOMERS
                 WHERE User_ID = ?
             """, (user_id,))
@@ -217,7 +218,8 @@ class EFAPI_Commands:
                     "subscription_level": row[3],
                     "total_spent": row[4],
                     "favourite_genre": row[5],
-                    "shows": row[6] or ""
+                    "shows": row[6] or "",
+                    "marketing_opt_in": bool(row[7])
                 }
                 return self._format_response(True, user, "User found")
             else:
@@ -248,6 +250,29 @@ class EFAPI_Commands:
                 
         except Exception as e:
             return self._format_response(False, message=f"Error updating subscription: {e}")
+    
+    def update_marketing_opt_in(self, user_id: int, marketing_opt_in: bool) -> str:
+        """Update user marketing opt-in preference"""
+        try:
+            conn = self._get_connection()
+            cursor = conn.cursor()
+            
+            cursor.execute("""
+                UPDATE CUSTOMERS 
+                SET Marketing_Opt_In = ?
+                WHERE User_ID = ?
+            """, (marketing_opt_in, user_id))
+            
+            if cursor.rowcount > 0:
+                conn.commit()
+                conn.close()
+                return self._format_response(True, message="Marketing preference updated successfully")
+            else:
+                conn.close()
+                return self._format_response(False, message="User not found")
+                
+        except Exception as e:
+            return self._format_response(False, message=f"Error updating marketing preference: {e}")
     
     def add_show_to_user(self, user_id: int, show_id: int) -> str:
         """Add show to user's shows collection"""
@@ -385,7 +410,7 @@ class EFAPI_Commands:
             cursor = conn.cursor()
             
             cursor.execute("""
-                SELECT User_ID, Username, Email, Subscription_Level, Total_Spent, Favourite_Genre
+                SELECT User_ID, Username, Email, Subscription_Level, Total_Spent, Favourite_Genre, Marketing_Opt_In
                 FROM CUSTOMERS
                 ORDER BY Username
             """)
@@ -398,7 +423,8 @@ class EFAPI_Commands:
                     "email": row[2],
                     "subscription_level": row[3],
                     "total_spent": row[4],
-                    "favourite_genre": row[5]
+                    "favourite_genre": row[5],
+                    "marketing_opt_in": bool(row[6])
                 })
             
             conn.close()
@@ -739,6 +765,7 @@ def main():
     parser.add_argument('--cost_to_rent', type=float, help='Show rental cost')
     parser.add_argument('--rental_id', type=int, help='Rental ID')
     parser.add_argument('--favourite_genre', help='User favourite genre')
+    parser.add_argument('--marketing_opt_in', action='store_true', help='Marketing opt-in flag')
         
     args = parser.parse_args()
     
@@ -789,6 +816,8 @@ def main():
             kwargs['rental_id'] = args.rental_id
         if args.favourite_genre:
             kwargs['favourite_genre'] = args.favourite_genre
+        if args.marketing_opt_in:
+            kwargs['marketing_opt_in'] = args.marketing_opt_in
         
         # Call the method with appropriate arguments
         result = method(**kwargs)
