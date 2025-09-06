@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 EasyFlix API (EFAPI.py)
-Enhanced secure API interface for EasyFlix database operations
+Secure API interface for EasyFlix database operations
 """
 
 import sqlite3
@@ -33,6 +33,7 @@ class EFAPI_Commands:
         try:
             conn = sqlite3.connect(self.db_path)
             conn.execute(f"PRAGMA key = '{self.password}'")
+            # Test connection
             conn.execute("SELECT name FROM sqlite_master WHERE type='table' LIMIT 1")
             return conn
         except sqlite3.Error as e:
@@ -63,8 +64,7 @@ class EFAPI_Commands:
             cursor = conn.cursor()
             
             cursor.execute("""
-                SELECT User_ID, Password_Hash, Salt, Username, Email, Subscription_Level, 
-                       Total_Spent, Favourite_Genre, Shows, Marketing_Opt_In
+                SELECT User_ID, Password_Hash, Salt, Username, Email, Subscription_Level, Total_Spent, Favourite_Genre, Shows
                 FROM CUSTOMERS 
                 WHERE Username = ?
             """, (username,))
@@ -73,7 +73,7 @@ class EFAPI_Commands:
             conn.close()
             
             if result:
-                user_id, stored_hash, salt, username, email, subscription_level, total_spent, favourite_genre, shows, marketing_opt_in = result
+                user_id, stored_hash, salt, username, email, subscription_level, total_spent, favourite_genre, shows = result
                 input_hash = self._hash_password(password, salt)
                 
                 if input_hash == stored_hash:
@@ -84,8 +84,7 @@ class EFAPI_Commands:
                         "subscription_level": subscription_level,
                         "total_spent": total_spent,
                         "favourite_genre": favourite_genre,
-                        "shows": shows or "",
-                        "marketing_opt_in": bool(marketing_opt_in) if marketing_opt_in is not None else False
+                        "shows": shows or ""
                     }
                     return self._format_response(True, user_data, "Authentication successful")
                 else:
@@ -96,7 +95,7 @@ class EFAPI_Commands:
         except Exception as e:
             return self._format_response(False, message=f"Authentication error: {e}")
     
-    def create_user(self, username: str, email: str, password: str, subscription_level: str, marketing_opt_in: str = "false") -> str:
+    def create_user(self, username: str, email: str, password: str, subscription_level: str) -> str:
         """Create new user account"""
         try:
             conn = self._get_connection()
@@ -113,13 +112,11 @@ class EFAPI_Commands:
             
             salt = self._generate_salt()
             password_hash = self._hash_password(password, salt)
-            marketing_bool = 1 if marketing_opt_in.lower() == "true" else 0
             
             cursor.execute("""
-                INSERT INTO CUSTOMERS (Username, Email, Password_Hash, Salt, Subscription_Level, 
-                                     Total_Spent, Favourite_Genre, Shows, Marketing_Opt_In)
-                VALUES (?, ?, ?, ?, ?, 0.00, '', '', ?)
-            """, (username, email, password_hash, salt, subscription_level, marketing_bool))
+                INSERT INTO CUSTOMERS (Username, Email, Password_Hash, Salt, Subscription_Level, Total_Spent, Favourite_Genre, Shows)
+                VALUES (?, ?, ?, ?, ?, 0.00, '', '')
+            """, (username, email, password_hash, salt, subscription_level))
             
             user_id = cursor.lastrowid
             conn.commit()
@@ -130,53 +127,18 @@ class EFAPI_Commands:
         except Exception as e:
             return self._format_response(False, message=f"User creation error: {e}")
     
-    def get_shows_paginated(self, page: int = 1, limit: int = 20, sort_by: str = "name", 
-                           sort_order: str = "ASC", genre: str = "", access_group: str = "") -> str:
-        """Get paginated shows with sorting and filtering"""
+    def get_all_shows(self) -> str:
+        """Get all shows from database"""
         try:
             conn = self._get_connection()
             cursor = conn.cursor()
             
-            offset = (page - 1) * limit
-            
-            # Build WHERE clause
-            where_conditions = []
-            params = []
-            
-            if genre and genre.lower() not in ["all", ""]:
-                where_conditions.append("Genre = ?")
-                params.append(genre)
-            
-            if access_group and access_group.lower() not in ["all", ""]:
-                where_conditions.append("Access_Group = ?")
-                params.append(access_group)
-            
-            where_clause = " WHERE " + " AND ".join(where_conditions) if where_conditions else ""
-            
-            # Valid sort columns
-            valid_sorts = {
-                "name": "Name",
-                "rating": "Rating",
-                "release_date": "Release_Date",
-                "genre": "Genre",
-                "length": "Length"
-            }
-            
-            sort_column = valid_sorts.get(sort_by.lower(), "Name")
-            order = "DESC" if sort_order.upper() == "DESC" else "ASC"
-            
-            # Get total count
-            cursor.execute(f"SELECT COUNT(*) FROM SHOWS{where_clause}", params)
-            total_count = cursor.fetchone()[0]
-            
-            # Get paginated results
-            cursor.execute(f"""
+            cursor.execute("""
                 SELECT Show_ID, Name, Release_Date, Rating, Director, Length, 
                        Genre, Access_Group, Cost_To_Rent
-                FROM SHOWS{where_clause}
-                ORDER BY {sort_column} {order}
-                LIMIT ? OFFSET ?
-            """, params + [limit, offset])
+                FROM SHOWS
+                ORDER BY Name
+            """)
             
             shows = []
             for row in cursor.fetchall():
@@ -193,42 +155,44 @@ class EFAPI_Commands:
                 })
             
             conn.close()
-            
-            result = {
-                "shows": shows,
-                "pagination": {
-                    "page": page,
-                    "limit": limit,
-                    "total_count": total_count,
-                    "total_pages": (total_count + limit - 1) // limit,
-                    "has_next": page * limit < total_count,
-                    "has_prev": page > 1
-                }
-            }
-            
-            return self._format_response(True, result, f"Retrieved {len(shows)} shows")
+            return self._format_response(True, shows, f"Retrieved {len(shows)} shows")
             
         except Exception as e:
             return self._format_response(False, message=f"Error retrieving shows: {e}")
     
-    def get_all_shows(self) -> str:
-        """Get all shows (for backward compatibility)"""
-        return self.get_shows_paginated(page=1, limit=1000)
-    
-    def get_genres(self) -> str:
-        """Get all unique genres"""
+    def get_shows_by_access(self, access_group: str) -> str:
+        """Get shows by access group (Basic/Premium)"""
         try:
             conn = self._get_connection()
             cursor = conn.cursor()
             
-            cursor.execute("SELECT DISTINCT Genre FROM SHOWS ORDER BY Genre")
-            genres = [row[0] for row in cursor.fetchall()]
+            cursor.execute("""
+                SELECT Show_ID, Name, Release_Date, Rating, Director, Length, 
+                       Genre, Access_Group, Cost_To_Rent
+                FROM SHOWS
+                WHERE Access_Group = ?
+                ORDER BY Name
+            """, (access_group,))
+            
+            shows = []
+            for row in cursor.fetchall():
+                shows.append({
+                    "show_id": row[0],
+                    "name": row[1],
+                    "release_date": row[2],
+                    "rating": row[3],
+                    "director": row[4],
+                    "length": row[5],
+                    "genre": row[6],
+                    "access_group": row[7],
+                    "cost_to_rent": row[8]
+                })
             
             conn.close()
-            return self._format_response(True, genres, f"Retrieved {len(genres)} genres")
+            return self._format_response(True, shows, f"Retrieved {len(shows)} {access_group} shows")
             
         except Exception as e:
-            return self._format_response(False, message=f"Error retrieving genres: {e}")
+            return self._format_response(False, message=f"Error retrieving shows: {e}")
     
     def get_user_info(self, user_id: int) -> str:
         """Get user information"""
@@ -237,8 +201,7 @@ class EFAPI_Commands:
             cursor = conn.cursor()
             
             cursor.execute("""
-                SELECT User_ID, Username, Email, Subscription_Level, Total_Spent, 
-                       Favourite_Genre, Shows, Marketing_Opt_In
+                SELECT User_ID, Username, Email, Subscription_Level, Total_Spent, Favourite_Genre, Shows
                 FROM CUSTOMERS
                 WHERE User_ID = ?
             """, (user_id,))
@@ -254,8 +217,7 @@ class EFAPI_Commands:
                     "subscription_level": row[3],
                     "total_spent": row[4],
                     "favourite_genre": row[5],
-                    "shows": row[6] or "",
-                    "marketing_opt_in": bool(row[7]) if row[7] is not None else False
+                    "shows": row[6] or ""
                 }
                 return self._format_response(True, user, "User found")
             else:
@@ -286,54 +248,6 @@ class EFAPI_Commands:
                 
         except Exception as e:
             return self._format_response(False, message=f"Error updating subscription: {e}")
-    
-    def update_marketing_opt_in(self, user_id: int, opt_in: str) -> str:
-        """Update user marketing opt-in preference"""
-        try:
-            conn = self._get_connection()
-            cursor = conn.cursor()
-            
-            opt_in_bool = 1 if opt_in.lower() == "true" else 0
-            
-            cursor.execute("""
-                UPDATE CUSTOMERS 
-                SET Marketing_Opt_In = ?
-                WHERE User_ID = ?
-            """, (opt_in_bool, user_id))
-            
-            if cursor.rowcount > 0:
-                conn.commit()
-                conn.close()
-                return self._format_response(True, message="Marketing preference updated successfully")
-            else:
-                conn.close()
-                return self._format_response(False, message="User not found")
-                
-        except Exception as e:
-            return self._format_response(False, message=f"Error updating marketing preference: {e}")
-    
-    def delete_user_account(self, user_id: int) -> str:
-        """Delete user account and all associated data"""
-        try:
-            conn = self._get_connection()
-            cursor = conn.cursor()
-            
-            # Delete user's rentals first
-            cursor.execute("DELETE FROM RENTALS WHERE User_ID = ?", (user_id,))
-            
-            # Delete user account
-            cursor.execute("DELETE FROM CUSTOMERS WHERE User_ID = ?", (user_id,))
-            
-            if cursor.rowcount > 0:
-                conn.commit()
-                conn.close()
-                return self._format_response(True, message="Account deleted successfully")
-            else:
-                conn.close()
-                return self._format_response(False, message="User not found")
-                
-        except Exception as e:
-            return self._format_response(False, message=f"Error deleting account: {e}")
     
     def add_show_to_user(self, user_id: int, show_id: int) -> str:
         """Add show to user's shows collection"""
@@ -464,32 +378,6 @@ class EFAPI_Commands:
         """Get user's rental history - redirects to get_user_shows"""
         return self.get_user_shows(user_id)
     
-    def change_password(self, user_id: int, new_password: str) -> str:
-        """Change user password"""
-        try:
-            conn = self._get_connection()
-            cursor = conn.cursor()
-            
-            salt = self._generate_salt()
-            password_hash = self._hash_password(new_password, salt)
-            
-            cursor.execute("""
-                UPDATE CUSTOMERS 
-                SET Password_Hash = ?, Salt = ?
-                WHERE User_ID = ?
-            """, (password_hash, salt, user_id))
-            
-            if cursor.rowcount > 0:
-                conn.commit()
-                conn.close()
-                return self._format_response(True, message="Password changed successfully")
-            else:
-                conn.close()
-                return self._format_response(False, message="User not found")
-                
-        except Exception as e:
-            return self._format_response(False, message=f"Error changing password: {e}")
-    
     def get_all_users(self) -> str:
         """Get all users (admin only)"""
         try:
@@ -618,6 +506,32 @@ class EFAPI_Commands:
                 
         except Exception as e:
             return self._format_response(False, message=f"Error deleting user: {e}")
+    
+    def change_password(self, user_id: int, new_password: str) -> str:
+        """Change user password"""
+        try:
+            conn = self._get_connection()
+            cursor = conn.cursor()
+            
+            salt = self._generate_salt()
+            password_hash = self._hash_password(new_password, salt)
+            
+            cursor.execute("""
+                UPDATE CUSTOMERS 
+                SET Password_Hash = ?, Salt = ?
+                WHERE User_ID = ?
+            """, (password_hash, salt, user_id))
+            
+            if cursor.rowcount > 0:
+                conn.commit()
+                conn.close()
+                return self._format_response(True, message="Password changed successfully")
+            else:
+                conn.close()
+                return self._format_response(False, message="User not found")
+                
+        except Exception as e:
+            return self._format_response(False, message=f"Error changing password: {e}")
     
     def add_show(self, name: str, release_date: str, rating: float, director: str, 
                  length: int, genre: str, access_group: str, cost_to_rent: float) -> str:
@@ -812,22 +726,16 @@ def main():
     parser.add_argument('--email', help='Email for user creation')
     parser.add_argument('--user_id', type=int, help='User ID')
     parser.add_argument('--show_id', type=int, help='Show ID')
+    parser.add_argument('--access_group', help='Access group (Basic/Premium)')
     parser.add_argument('--subscription_level', help='Subscription level')
-    parser.add_argument('--marketing_opt_in', help='Marketing opt-in (true/false)')
-    parser.add_argument('--opt_in', help='Opt-in preference (true/false)')
     parser.add_argument('--db_path', default='easyflix.db', help='Database path')
     parser.add_argument('--new_password', help='New password for password change')
-    parser.add_argument('--page', type=int, default=1, help='Page number for pagination')
-    parser.add_argument('--limit', type=int, default=20, help='Items per page')
-    parser.add_argument('--sort_by', default='name', help='Sort by field')
-    parser.add_argument('--sort_order', default='ASC', help='Sort order (ASC/DESC)')
-    parser.add_argument('--genre', help='Filter by genre')
-    parser.add_argument('--access_group', help='Filter by access group')
     parser.add_argument('--name', help='Show name')
     parser.add_argument('--release_date', help='Show release date')
     parser.add_argument('--rating', type=float, help='Show rating')
     parser.add_argument('--director', help='Show director')
     parser.add_argument('--length', type=int, help='Show length in minutes')
+    parser.add_argument('--genre', help='Show genre')
     parser.add_argument('--cost_to_rent', type=float, help='Show rental cost')
     parser.add_argument('--rental_id', type=int, help='Rental ID')
     parser.add_argument('--favourite_genre', help='User favourite genre')
@@ -857,26 +765,12 @@ def main():
             kwargs['user_id'] = args.user_id
         if args.show_id:
             kwargs['show_id'] = args.show_id
-        if args.subscription_level:
-            kwargs['subscription_level'] = args.subscription_level
-        if args.marketing_opt_in:
-            kwargs['marketing_opt_in'] = args.marketing_opt_in
-        if args.opt_in:
-            kwargs['opt_in'] = args.opt_in
-        if args.new_password:
-            kwargs['new_password'] = args.new_password
-        if args.page:
-            kwargs['page'] = args.page
-        if args.limit:
-            kwargs['limit'] = args.limit
-        if args.sort_by:
-            kwargs['sort_by'] = args.sort_by
-        if args.sort_order:
-            kwargs['sort_order'] = args.sort_order
-        if args.genre:
-            kwargs['genre'] = args.genre
         if args.access_group:
             kwargs['access_group'] = args.access_group
+        if args.subscription_level:
+            kwargs['subscription_level'] = args.subscription_level
+        if args.new_password:
+            kwargs['new_password'] = args.new_password
         if args.name:
             kwargs['name'] = args.name
         if args.release_date:
@@ -887,6 +781,8 @@ def main():
             kwargs['director'] = args.director
         if args.length:
             kwargs['length'] = args.length
+        if args.genre:
+            kwargs['genre'] = args.genre
         if args.cost_to_rent:
             kwargs['cost_to_rent'] = args.cost_to_rent
         if args.rental_id:
