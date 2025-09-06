@@ -97,7 +97,7 @@ class EFAPI_Commands:
             return self._format_response(False, message=f"Authentication error: {e}")
     
     def create_user(self, username: str, email: str, password: str, subscription_level: str, marketing_opt_in: bool = False) -> str:
-        """Create new user account"""
+        """Create new user account with subscription charges"""
         try:
             conn = self._get_connection()
             cursor = conn.cursor()
@@ -114,16 +114,19 @@ class EFAPI_Commands:
             salt = self._generate_salt()
             password_hash = self._hash_password(password, salt)
             
+            # Calculate subscription cost
+            subscription_cost = 30.00 if subscription_level == "Basic" else 80.00
+            
             cursor.execute("""
                 INSERT INTO CUSTOMERS (Username, Email, Password_Hash, Salt, Subscription_Level, Total_Spent, Favourite_Genre, Shows, Marketing_Opt_In)
-                VALUES (?, ?, ?, ?, ?, 0.00, '', '', ?)
-            """, (username, email, password_hash, salt, subscription_level, marketing_opt_in))
+                VALUES (?, ?, ?, ?, ?, ?, '', '', ?)
+            """, (username, email, password_hash, salt, subscription_level, subscription_cost, marketing_opt_in))
             
             user_id = cursor.lastrowid
             conn.commit()
             conn.close()
             
-            return self._format_response(True, {"user_id": user_id}, "User created successfully")
+            return self._format_response(True, {"user_id": user_id, "charged": subscription_cost}, "User created successfully")
             
         except Exception as e:
             return self._format_response(False, message=f"User creation error: {e}")
@@ -160,6 +163,56 @@ class EFAPI_Commands:
             
         except Exception as e:
             return self._format_response(False, message=f"Error retrieving shows: {e}")
+    
+    def search_shows(self, genre: str = None, rating: str = None, year: int = None) -> str:
+        """Advanced search for shows with filtering"""
+        try:
+            conn = self._get_connection()
+            cursor = conn.cursor()
+            
+            query = """
+                SELECT Show_ID, Name, Release_Date, Rating, Director, Length, 
+                       Genre, Access_Group, Cost_To_Rent
+                FROM SHOWS
+                WHERE 1=1
+            """
+            params = []
+            
+            if genre:
+                query += " AND Genre LIKE ?"
+                params.append(f"%{genre}%")
+            
+            if rating:
+                query += " AND Rating = ?"
+                params.append(rating)
+            
+            if year:
+                query += " AND strftime('%Y', Release_Date) = ?"
+                params.append(str(year))
+            
+            query += " ORDER BY Name"
+            
+            cursor.execute(query, params)
+            
+            shows = []
+            for row in cursor.fetchall():
+                shows.append({
+                    "show_id": row[0],
+                    "name": row[1],
+                    "release_date": row[2],
+                    "rating": row[3],
+                    "director": row[4],
+                    "length": row[5],
+                    "genre": row[6],
+                    "access_group": row[7],
+                    "cost_to_rent": row[8]
+                })
+            
+            conn.close()
+            return self._format_response(True, shows, f"Found {len(shows)} shows")
+            
+        except Exception as e:
+            return self._format_response(False, message=f"Error searching shows: {e}")
     
     def get_shows_by_access(self, access_group: str) -> str:
         """Get shows by access group (Basic/Premium)"""
@@ -229,24 +282,35 @@ class EFAPI_Commands:
             return self._format_response(False, message=f"Error retrieving user: {e}")
     
     def update_subscription(self, user_id: int, subscription_level: str) -> str:
-        """Update user subscription level"""
+        """Update user subscription level with pricing"""
         try:
             conn = self._get_connection()
             cursor = conn.cursor()
             
-            cursor.execute("""
-                UPDATE CUSTOMERS 
-                SET Subscription_Level = ?
-                WHERE User_ID = ?
-            """, (subscription_level, user_id))
+            # Get current subscription
+            cursor.execute("SELECT Subscription_Level, Total_Spent FROM CUSTOMERS WHERE User_ID = ?", (user_id,))
+            result = cursor.fetchone()
             
-            if cursor.rowcount > 0:
-                conn.commit()
-                conn.close()
-                return self._format_response(True, message="Subscription updated successfully")
-            else:
+            if not result:
                 conn.close()
                 return self._format_response(False, message="User not found")
+            
+            current_level, current_spent = result
+            charge = 0.00
+            
+            # Calculate charge: Basic->Premium = $80, Premium->Basic = free
+            if current_level == "Basic" and subscription_level == "Premium":
+                charge = 80.00
+            
+            cursor.execute("""
+                UPDATE CUSTOMERS 
+                SET Subscription_Level = ?, Total_Spent = Total_Spent + ?
+                WHERE User_ID = ?
+            """, (subscription_level, charge, user_id))
+            
+            conn.commit()
+            conn.close()
+            return self._format_response(True, {"charged": charge}, "Subscription updated successfully")
                 
         except Exception as e:
             return self._format_response(False, message=f"Error updating subscription: {e}")
@@ -329,13 +393,13 @@ class EFAPI_Commands:
                 WHERE User_ID = ?
             """, (new_shows, cost, user_id))
             
-            # Create rental record if there's a cost
+            # Create buy record if there's a cost
             if cost > 0:
-                rental_date = date.today()
+                buy_date = date.today()
                 cursor.execute("""
-                    INSERT INTO RENTALS (User_ID, Show_ID, Rental_Date, Expired, Cost)
+                    INSERT INTO BUYS (User_ID, Show_ID, Buy_Date, Expired, Cost)
                     VALUES (?, ?, ?, 0, ?)
-                """, (user_id, show_id, rental_date, cost))
+                """, (user_id, show_id, buy_date, cost))
             
             conn.commit()
             conn.close()
@@ -345,9 +409,50 @@ class EFAPI_Commands:
         except Exception as e:
             return self._format_response(False, message=f"Error adding show: {e}")
     
-    def create_rental(self, user_id: int, show_id: int) -> str:
-        """Create new rental - redirects to add_show_to_user"""
-        return self.add_show_to_user(user_id, show_id)
+    def remove_show_from_user(self, user_id: int, show_id: int) -> str:
+        """Remove show from user's collection"""
+        try:
+            conn = self._get_connection()
+            cursor = conn.cursor()
+            
+            # Get user's current shows
+            cursor.execute("SELECT Shows FROM CUSTOMERS WHERE User_ID = ?", (user_id,))
+            result = cursor.fetchone()
+            
+            if not result:
+                conn.close()
+                return self._format_response(False, message="User not found")
+            
+            current_shows = result[0]
+            if not current_shows:
+                conn.close()
+                return self._format_response(False, message="No shows to remove")
+            
+            # Parse current shows
+            show_ids = [int(x.strip()) for x in current_shows.split(',') if x.strip()]
+            
+            if show_id not in show_ids:
+                conn.close()
+                return self._format_response(False, message="Show not in your collection")
+            
+            # Remove show
+            show_ids.remove(show_id)
+            new_shows = ','.join(map(str, show_ids)) if show_ids else ''
+            
+            # Update user's shows
+            cursor.execute("""
+                UPDATE CUSTOMERS 
+                SET Shows = ?
+                WHERE User_ID = ?
+            """, (new_shows, user_id))
+            
+            conn.commit()
+            conn.close()
+            
+            return self._format_response(True, message="Show removed successfully")
+            
+        except Exception as e:
+            return self._format_response(False, message=f"Error removing show: {e}")
     
     def get_user_shows(self, user_id: int) -> str:
         """Get user's shows from their collection"""
@@ -399,10 +504,6 @@ class EFAPI_Commands:
         except Exception as e:
             return self._format_response(False, message=f"Error retrieving user shows: {e}")
     
-    def get_user_rentals(self, user_id: int) -> str:
-        """Get user's rental history - redirects to get_user_shows"""
-        return self.get_user_shows(user_id)
-    
     def get_all_users(self) -> str:
         """Get all users (admin only)"""
         try:
@@ -440,7 +541,7 @@ class EFAPI_Commands:
             cursor = conn.cursor()
             
             cursor.execute("""
-                SELECT Date, Total_Shows_Rented, Total_Subscriptions, Total_Users, Last_Updated
+                SELECT Date, Total_Shows_Bought, Total_Subscriptions, Total_Users, Last_Updated
                 FROM STATISTICS
                 ORDER BY Date DESC
                 LIMIT 1
@@ -449,7 +550,7 @@ class EFAPI_Commands:
             stats_row = cursor.fetchone()
             
             cursor.execute("""
-                SELECT Date, Total_Revenue_Rent, Total_Revenue_Subscriptions, 
+                SELECT Date, Total_Revenue_Buys, Total_Revenue_Subscriptions, 
                        Total_Combined_Revenue, Last_Updated
                 FROM FINANCIALS
                 ORDER BY Date DESC
@@ -462,14 +563,14 @@ class EFAPI_Commands:
             data = {
                 "statistics": {
                     "date": stats_row[0] if stats_row else None,
-                    "total_shows_rented": stats_row[1] if stats_row else 0,
+                    "total_shows_bought": stats_row[1] if stats_row else 0,
                     "total_subscriptions": stats_row[2] if stats_row else 0,
                     "total_users": stats_row[3] if stats_row else 0,
                     "last_updated": stats_row[4] if stats_row else None
                 },
                 "financials": {
                     "date": finance_row[0] if finance_row else None,
-                    "total_revenue_rent": finance_row[1] if finance_row else 0.00,
+                    "total_revenue_buys": finance_row[1] if finance_row else 0.00,
                     "total_revenue_subscriptions": finance_row[2] if finance_row else 0.00,
                     "total_combined_revenue": finance_row[3] if finance_row else 0.00,
                     "last_updated": finance_row[4] if finance_row else None
@@ -488,7 +589,7 @@ class EFAPI_Commands:
             cursor = conn.cursor()
             
             cursor.execute("""
-                SELECT Date, Total_Revenue_Rent, Total_Revenue_Subscriptions, 
+                SELECT Date, Total_Revenue_Buys, Total_Revenue_Subscriptions, 
                        Total_Combined_Revenue, Last_Updated
                 FROM FINANCIALS
                 ORDER BY Date DESC
@@ -498,7 +599,7 @@ class EFAPI_Commands:
             for row in cursor.fetchall():
                 finances.append({
                     "date": row[0],
-                    "total_revenue_rent": row[1],
+                    "total_revenue_buys": row[1],
                     "total_revenue_subscriptions": row[2],
                     "total_combined_revenue": row[3],
                     "last_updated": row[4]
@@ -516,8 +617,8 @@ class EFAPI_Commands:
             conn = self._get_connection()
             cursor = conn.cursor()
             
-            # Delete user's rentals first
-            cursor.execute("DELETE FROM RENTALS WHERE User_ID = ?", (user_id,))
+            # Delete user's buys first
+            cursor.execute("DELETE FROM BUYS WHERE User_ID = ?", (user_id,))
             
             # Delete user account
             cursor.execute("DELETE FROM CUSTOMERS WHERE User_ID = ?", (user_id,))
@@ -559,7 +660,7 @@ class EFAPI_Commands:
         except Exception as e:
             return self._format_response(False, message=f"Error changing password: {e}")
     
-    def add_show(self, name: str, release_date: str, rating: float, director: str, 
+    def add_show(self, name: str, release_date: str, rating: str, director: str, 
                  length: int, genre: str, access_group: str, cost_to_rent: float) -> str:
         """Add new show to catalogue"""
         try:
@@ -627,65 +728,40 @@ class EFAPI_Commands:
         except Exception as e:
             return self._format_response(False, message=f"Error updating show cost: {e}")
     
-    def get_all_rentals(self) -> str:
-        """Get all current rentals (admin only)"""
+    def get_all_buys(self) -> str:
+        """Get all current buys (admin only)"""
         try:
             conn = self._get_connection()
             cursor = conn.cursor()
             
             cursor.execute("""
-                SELECT r.Rental_ID, r.User_ID, c.Username, r.Show_ID, s.Name,
-                       r.Rental_Date, r.Return_Date, r.Expired, r.Cost
-                FROM RENTALS r
-                JOIN CUSTOMERS c ON r.User_ID = c.User_ID
-                JOIN SHOWS s ON r.Show_ID = s.Show_ID
-                ORDER BY r.Rental_Date DESC
+                SELECT b.Buy_ID, b.User_ID, c.Username, b.Show_ID, s.Name,
+                       b.Buy_Date, b.Return_Date, b.Expired, b.Cost
+                FROM BUYS b
+                JOIN CUSTOMERS c ON b.User_ID = c.User_ID
+                JOIN SHOWS s ON b.Show_ID = s.Show_ID
+                ORDER BY b.Buy_Date DESC
             """)
             
-            rentals = []
+            buys = []
             for row in cursor.fetchall():
-                rentals.append({
-                    "rental_id": row[0],
+                buys.append({
+                    "buy_id": row[0],
                     "user_id": row[1],
                     "username": row[2],
                     "show_id": row[3],
                     "show_name": row[4],
-                    "rental_date": row[5],
+                    "buy_date": row[5],
                     "return_date": row[6],
                     "expired": bool(row[7]),
                     "cost": row[8]
                 })
             
             conn.close()
-            return self._format_response(True, rentals, f"Retrieved {len(rentals)} rentals")
+            return self._format_response(True, buys, f"Retrieved {len(buys)} buys")
             
         except Exception as e:
-            return self._format_response(False, message=f"Error retrieving rentals: {e}")
-    
-    def return_rental(self, rental_id: int) -> str:
-        """Return a rental"""
-        try:
-            conn = self._get_connection()
-            cursor = conn.cursor()
-            
-            return_date = date.today()
-            
-            cursor.execute("""
-                UPDATE RENTALS 
-                SET Return_Date = ?, Expired = 1
-                WHERE Rental_ID = ?
-            """, (return_date, rental_id))
-            
-            if cursor.rowcount > 0:
-                conn.commit()
-                conn.close()
-                return self._format_response(True, message="Rental returned successfully")
-            else:
-                conn.close()
-                return self._format_response(False, message="Rental not found")
-                
-        except Exception as e:
-            return self._format_response(False, message=f"Error returning rental: {e}")
+            return self._format_response(False, message=f"Error retrieving buys: {e}")
     
     def search_shows_by_genre(self, genre: str) -> str:
         """Search shows by genre"""
@@ -758,14 +834,15 @@ def main():
     parser.add_argument('--new_password', help='New password for password change')
     parser.add_argument('--name', help='Show name')
     parser.add_argument('--release_date', help='Show release date')
-    parser.add_argument('--rating', type=float, help='Show rating')
+    parser.add_argument('--rating', help='Show rating')
     parser.add_argument('--director', help='Show director')
     parser.add_argument('--length', type=int, help='Show length in minutes')
     parser.add_argument('--genre', help='Show genre')
     parser.add_argument('--cost_to_rent', type=float, help='Show rental cost')
-    parser.add_argument('--rental_id', type=int, help='Rental ID')
+    parser.add_argument('--buy_id', type=int, help='Buy ID')
     parser.add_argument('--favourite_genre', help='User favourite genre')
     parser.add_argument('--marketing_opt_in', action='store_true', help='Marketing opt-in flag')
+    parser.add_argument('--year', type=int, help='Release year for search')
         
     args = parser.parse_args()
     
@@ -812,12 +889,14 @@ def main():
             kwargs['genre'] = args.genre
         if args.cost_to_rent:
             kwargs['cost_to_rent'] = args.cost_to_rent
-        if args.rental_id:
-            kwargs['rental_id'] = args.rental_id
+        if args.buy_id:
+            kwargs['buy_id'] = args.buy_id
         if args.favourite_genre:
             kwargs['favourite_genre'] = args.favourite_genre
         if args.marketing_opt_in:
             kwargs['marketing_opt_in'] = args.marketing_opt_in
+        if args.year:
+            kwargs['year'] = args.year
         
         # Call the method with appropriate arguments
         result = method(**kwargs)
