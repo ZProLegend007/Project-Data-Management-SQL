@@ -752,6 +752,7 @@ class MarketingPreferenceScreen(Screen):
     async def update_marketing_preference_async(self, marketing_opt_in: bool):
         """Update marketing preference asynchronously"""
         user_id = self.app.current_user.get("user_id")
+        
         result = await asyncio.to_thread(
             self.app.call_api, "update_marketing_opt_in", 
             user_id=user_id, marketing_opt_in=marketing_opt_in
@@ -1259,7 +1260,13 @@ class EasyFlixUserApp(App):
             cmd = [sys.executable, "EFAPI.py", "--command", command]
             
             for key, value in kwargs.items():
-                if isinstance(value, bool):
+                if key == 'marketing_opt_in' and isinstance(value, bool):
+                    # Handle marketing_opt_in boolean specifically
+                    if value:
+                        cmd.append("--marketing_opt_in_true")
+                    else:
+                        cmd.append("--marketing_opt_in_false")
+                elif isinstance(value, bool):
                     if value:
                         cmd.append(f"--{key}")
                 else:
