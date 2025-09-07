@@ -9,7 +9,7 @@ import sys
 import os
 import asyncio
 from textual.app import App, ComposeResult
-from textual.containers import Container, Horizontal, Vertical, ScrollableContainer, Center, Middle, Grid
+from textual.containers import Container, Horizontal, Vertical, ScrollableContainer, Center, Middle
 from textual.widgets import Button, Input, Label, Select, Static, Header, Footer, LoadingIndicator, Checkbox
 from textual.screen import Screen, ModalScreen
 from textual.binding import Binding
@@ -20,25 +20,19 @@ from typing import Dict, List, Optional, Any
 class LoadingScreen(ModalScreen):
     """Loading screen modal"""
     
-    BINDINGS = [("escape", "app.pop_screen", "Close")]
-    
     def __init__(self, message: str = "Loading..."):
         super().__init__()
         self.message = message
     
     def compose(self) -> ComposeResult:
-        with Center():
-            with Middle():
-                yield Container(
-                    Static(self.message, classes="loading_text"),
-                    LoadingIndicator(),
-                    classes="loading_container"
-                )
+        yield Container(
+            Static(self.message, classes="loading_text"),
+            LoadingIndicator(),
+            classes="loading_container"
+        )
 
 class RentConfirmModal(ModalScreen):
     """Modal for confirming premium show purchase"""
-    
-    BINDINGS = [("escape", "app.pop_screen", "Close")]
     
     def __init__(self, show_name: str, cost: float, show_id: int):
         super().__init__()
@@ -47,20 +41,18 @@ class RentConfirmModal(ModalScreen):
         self.show_id = show_id
     
     def compose(self) -> ComposeResult:
-        with Center():
-            with Middle():
-                yield Container(
-                    Static(f"Buy Premium Show", classes="modal_title"),
-                    Static(f"Show: {self.show_name}", classes="modal_text"),
-                    Static(f"Cost: ${self.cost:.2f}", classes="modal_text"),
-                    Static("Would you like to buy this premium show?", classes="modal_text"),
-                    Horizontal(
-                        Button("Buy Show", id="confirm_rent", variant="primary"),
-                        Button("Cancel", id="cancel_rent", variant="default"),
-                        classes="modal_buttons"
-                    ),
-                    classes="modal_container"
-                )
+        yield Container(
+            Static(f"Buy Premium Show", classes="modal_title"),
+            Static(f"Show: {self.show_name}", classes="modal_text"),
+            Static(f"Cost: ${self.cost:.2f}", classes="modal_text"),
+            Static("Would you like to buy this premium show?", classes="modal_text"),
+            Horizontal(
+                Button("Buy Show", id="confirm_rent", variant="primary"),
+                Button("Cancel", id="cancel_rent", variant="default"),
+                classes="modal_buttons"
+            ),
+            classes="modal_container_fullscreen"
+        )
     
     def on_button_pressed(self, event: Button.Pressed) -> None:
         if event.button.id == "confirm_rent":
@@ -71,27 +63,23 @@ class RentConfirmModal(ModalScreen):
 class RemoveConfirmModal(ModalScreen):
     """Modal for confirming show removal"""
     
-    BINDINGS = [("escape", "app.pop_screen", "Close")]
-    
     def __init__(self, show_name: str, show_id: int):
         super().__init__()
         self.show_name = show_name
         self.show_id = show_id
     
     def compose(self) -> ComposeResult:
-        with Center():
-            with Middle():
-                yield Container(
-                    Static(f"Remove Show", classes="modal_title"),
-                    Static(f"Show: {self.show_name}", classes="modal_text"),
-                    Static("Are you sure you want to remove this show from your collection?", classes="modal_text"),
-                    Horizontal(
-                        Button("Remove", id="confirm_remove", variant="error"),
-                        Button("Cancel", id="cancel_remove", variant="default"),
-                        classes="modal_buttons"
-                    ),
-                    classes="modal_container"
-                )
+        yield Container(
+            Static(f"Remove Show", classes="modal_title"),
+            Static(f"Show: {self.show_name}", classes="modal_text"),
+            Static("Are you sure you want to remove this show from your collection?", classes="modal_text"),
+            Horizontal(
+                Button("Remove", id="confirm_remove", variant="error"),
+                Button("Cancel", id="cancel_remove", variant="default"),
+                classes="modal_buttons"
+            ),
+            classes="modal_container_fullscreen"
+        )
     
     def on_button_pressed(self, event: Button.Pressed) -> None:
         if event.button.id == "confirm_remove":
@@ -104,17 +92,15 @@ class LoginScreen(Screen):
     
     def compose(self) -> ComposeResult:
         yield Header()
-        with Center():
-            with Middle():
-                yield Container(
-                    Static("Welcome to EasyFlix", classes="title"),
-                    Container(
-                        Button("Login", id="login_btn", variant="primary"),
-                        Button("Create Account", id="create_btn", variant="success"),
-                        classes="button_container"
-                    ),
-                    classes="login_container"
-                )
+        yield Container(
+            Static("Welcome to EasyFlix", classes="title"),
+            Container(
+                Button("Login", id="login_btn", variant="primary"),
+                Button("Create Account", id="create_btn", variant="success"),
+                classes="button_container"
+            ),
+            classes="login_container"
+        )
         yield Footer()
 
     def on_button_pressed(self, event: Button.Pressed) -> None:
@@ -128,24 +114,22 @@ class LoginFormScreen(Screen):
     
     def compose(self) -> ComposeResult:
         yield Header()
-        with Center():
-            with Middle():
-                yield Container(
-                    Static("Login to EasyFlix", classes="title"),
-                    Container(
-                        Label("Username:"),
-                        Input(placeholder="Enter username", id="username"),
-                        Label("Password:"),
-                        Input(placeholder="Enter password", password=True, id="password"),
-                        Horizontal(
-                            Button("Login", id="submit", variant="primary"),
-                            Button("Back", id="back", variant="default"),
-                            classes="button_row"
-                        ),
-                        classes="form_container"
-                    ),
-                    classes="main_container"
-                )
+        yield Container(
+            Static("Login to EasyFlix", classes="title"),
+            Container(
+                Label("Username:"),
+                Input(placeholder="Enter username", id="username"),
+                Label("Password:"),
+                Input(placeholder="Enter password", password=True, id="password"),
+                Horizontal(
+                    Button("Login", id="submit", variant="primary"),
+                    Button("Back", id="back", variant="default"),
+                    classes="button_row"
+                ),
+                classes="form_container"
+            ),
+            classes="main_container_fullscreen"
+        )
         yield Footer()
 
     @work(exclusive=True)
@@ -155,13 +139,15 @@ class LoginFormScreen(Screen):
             self.app.call_api, "authenticate_user", 
             username=username, password=password
         )
-        if result and result.get("success"):
+        
+        if result is not None and result.get("success"):
             user_data = result.get("data", {})
             self.app.current_user = user_data
             self.app.pop_screen()
             self.app.push_screen(MainScreen())
         else:
-            self.notify("Login failed: " + result.get("message", "Unknown error"), severity="error")
+            error_msg = result.get("message", "Unknown error") if result else "API connection failed"
+            self.notify("Login failed: " + error_msg, severity="error")
 
     def on_button_pressed(self, event: Button.Pressed) -> None:
         if event.button.id == "submit":
@@ -180,29 +166,27 @@ class CreateAccountScreen(Screen):
     
     def compose(self) -> ComposeResult:
         yield Header()
-        with Center():
-            with Middle():
-                yield Container(
-                    Static("Create EasyFlix Account", classes="title"),
-                    Container(
-                        Label("Username:"),
-                        Input(placeholder="Enter username", id="username"),
-                        Label("Email:"),
-                        Input(placeholder="Enter email", id="email"),
-                        Label("Password:"),
-                        Input(placeholder="Enter password", password=True, id="password"),
-                        Label("Subscription Level:"),
-                        Select([("Basic - $30", "Basic"), ("Premium - $80", "Premium")], id="subscription"),
-                        Checkbox("I agree to receive marketing communications", id="marketing_checkbox"),
-                        Horizontal(
-                            Button("Create Account", id="submit", variant="primary"),
-                            Button("Back", id="back", variant="default"),
-                            classes="button_row"
-                        ),
-                        classes="form_container"
-                    ),
-                    classes="main_container"
-                )
+        yield Container(
+            Static("Create EasyFlix Account", classes="title"),
+            Container(
+                Label("Username:"),
+                Input(placeholder="Enter username", id="username"),
+                Label("Email:"),
+                Input(placeholder="Enter email", id="email"),
+                Label("Password:"),
+                Input(placeholder="Enter password", password=True, id="password"),
+                Label("Subscription Level:"),
+                Select([("Basic - $30", "Basic"), ("Premium - $80", "Premium")], id="subscription"),
+                Checkbox("I agree to receive marketing communications", id="marketing_checkbox"),
+                Horizontal(
+                    Button("Create Account", id="submit", variant="primary"),
+                    Button("Back", id="back", variant="default"),
+                    classes="button_row"
+                ),
+                classes="form_container"
+            ),
+            classes="main_container_fullscreen"
+        )
         yield Footer()
 
     @work(exclusive=True)
@@ -213,12 +197,14 @@ class CreateAccountScreen(Screen):
             username=username, email=email, password=password, 
             subscription_level=subscription, marketing_opt_in=marketing_opt_in
         )
-        if result and result.get("success"):
-            charged = result.get("data", {}).get("charged", 0)
+        
+        if result is not None and result.get("success"):
+            charged = result.get("data", {}).get("charged", 0) if result.get("data") else 0
             self.notify(f"Account created successfully! Charged: ${charged:.2f}. Please log in.", severity="information")
             self.app.pop_screen()
         else:
-            self.notify("Account creation failed: " + result.get("message", "Unknown error"), severity="error")
+            error_msg = result.get("message", "Unknown error") if result else "API connection failed"
+            self.notify("Account creation failed: " + error_msg, severity="error")
 
     def on_button_pressed(self, event: Button.Pressed) -> None:
         if event.button.id == "submit":
@@ -236,13 +222,15 @@ class CreateAccountScreen(Screen):
             self.app.pop_screen()
 
 class MainScreen(Screen):
-    """Main application screen with optimized performance"""
+    """Main application screen"""
     
     current_view = reactive("shows")
-    shows_cache = {}
+    current_search_filters = {}
+    shows_cache = []
     genres_cache = []
     ratings_cache = []
-    current_filters = {}
+    interface_built = False
+    search_timer = None
     
     def compose(self) -> ComposeResult:
         yield Header()
@@ -264,28 +252,30 @@ class MainScreen(Screen):
         yield Footer()
 
     def on_mount(self) -> None:
-        self.load_initial_data()
+        self.genres_cache = [
+            "Action", "Adventure", "Animation", "Comedy", "Crime", "Drama", 
+            "Fantasy", "History", "Romance", "Sci-Fi", "Thriller"
+        ]
+        self.ratings_cache = [
+            "G", "PG", "PG-13", "R", "TV-14", "TV-MA", "TV-PG"
+        ]
+        
+        self.load_genres_and_ratings()
+        self.load_shows()
 
     @work(exclusive=True)
-    async def load_initial_data(self):
-        """Load initial data including genres and ratings"""
+    async def load_genres_and_ratings(self):
+        """Load genres and ratings for filters"""
         try:
-            # Load genres and ratings in parallel
-            genres_task = asyncio.to_thread(self.app.call_api, "get_unique_genres")
-            ratings_task = asyncio.to_thread(self.app.call_api, "get_unique_ratings")
+            genres_result = await asyncio.to_thread(self.app.call_api, "get_available_genres")
+            if genres_result is not None and genres_result.get("success"):
+                self.genres_cache = genres_result.get("data", self.genres_cache)
             
-            genres_result, ratings_result = await asyncio.gather(genres_task, ratings_task)
-            
-            if genres_result and genres_result.get("success"):
-                self.genres_cache = genres_result.get("data", [])
-            
-            if ratings_result and ratings_result.get("success"):
-                self.ratings_cache = ratings_result.get("data", [])
-            
-            # Load shows
-            self.load_shows()
+            ratings_result = await asyncio.to_thread(self.app.call_api, "get_available_ratings")
+            if ratings_result is not None and ratings_result.get("success"):
+                self.ratings_cache = ratings_result.get("data", self.ratings_cache)
         except Exception as e:
-            self.notify(f"Error loading initial data: {e}", severity="error")
+            self.notify(f"Error loading filters: {e}", severity="warning")
 
     def on_button_pressed(self, event: Button.Pressed) -> None:
         if event.button.id == "shows_btn":
@@ -315,72 +305,67 @@ class MainScreen(Screen):
             self.app.push_screen(ChangeSubscriptionScreen())
         elif event.button.id == "update_marketing":
             self.app.push_screen(MarketingPreferenceScreen())
-        elif event.button.id == "clear_search":
-            self.current_filters = {}
-            self.load_shows()
-
-    def on_select_changed(self, event: Select.Changed) -> None:
-        """Handle filter changes"""
-        if event.control.id == "genre_filter":
-            if event.value and event.value != "all":
-                self.current_filters["genre"] = event.value
-            elif "genre" in self.current_filters:
-                del self.current_filters["genre"]
-            self.load_shows()
-        elif event.control.id == "rating_filter":
-            if event.value and event.value != "all":
-                self.current_filters["rating"] = event.value
-            elif "rating" in self.current_filters:
-                del self.current_filters["rating"]
-            self.load_shows()
 
     def on_input_changed(self, event: Input.Changed) -> None:
-        """Handle search input changes with debouncing"""
-        if event.control.id == "name_search":
-            # Simple debouncing - only search after a pause
-            self.set_timer(0.5, lambda: self.search_by_name(event.value.strip()))
+        if event.input.id == "search_text":
+            # Cancel previous timer if it exists
+            if self.search_timer:
+                try:
+                    self.search_timer.stop()
+                except:
+                    pass
+            # Set new timer for 2 seconds
+            self.search_timer = self.set_timer(2.0, self.apply_filters)
 
-    def search_by_name(self, name: str):
-        """Search shows by name"""
-        if name:
-            self.current_filters["name"] = name
-        elif "name" in self.current_filters:
-            del self.current_filters["name"]
-        self.load_shows()
+    def on_select_changed(self, event: Select.Changed) -> None:
+        if event.select.id in ["genre_filter", "rating_filter"]:
+            self.apply_filters()
+
+    def apply_filters(self):
+        """Apply current filters and search"""
+        if not self.interface_built or self.current_view != "shows":
+            return
+            
+        try:
+            content = self.query_one("#content_area")
+            
+            self.current_search_filters = {}
+            
+            # Get search text
+            search_input = content.query_one("#search_text", Input)
+            search_text = search_input.value.strip()
+            if search_text:
+                self.current_search_filters["name"] = search_text
+            
+            # Get genre filter - only add if it's a real value
+            genre_select = content.query_one("#genre_filter", Select)
+            genre_value = genre_select.value
+            if genre_value and genre_value != "All" and genre_value != Select.BLANK:
+                self.current_search_filters["genre"] = genre_value
+            
+            # Get rating filter - only add if it's a real value
+            rating_select = content.query_one("#rating_filter", Select)
+            rating_value = rating_select.value
+            if rating_value and rating_value != "All" and rating_value != Select.BLANK:
+                self.current_search_filters["rating"] = rating_value
+            
+            self.refresh_shows_data()
+        except Exception:
+            pass
 
     def update_sidebar_buttons(self, active_button_id: str):
         """Update sidebar button styles"""
         button_ids = ["shows_btn", "my_shows_btn", "account_btn"]
         for btn_id in button_ids:
-            try:
-                button = self.query_one(f"#{btn_id}", Button)
-                if btn_id == active_button_id:
-                    button.variant = "primary"
-                else:
-                    button.variant = "default"
-            except:
-                pass
+            button = self.query_one(f"#{btn_id}", Button)
+            if btn_id == active_button_id:
+                button.variant = "primary"
+            else:
+                button.variant = "default"
 
-    @work(exclusive=True)
-    async def handle_show_action_async(self, show_id: int):
-        """Handle show action asynchronously"""
-        cache_key = str(sorted(self.current_filters.items()))
-        
-        if cache_key in self.shows_cache:
-            shows = self.shows_cache[cache_key]
-        else:
-            if self.current_filters:
-                shows_result = await asyncio.to_thread(self.app.call_api, "search_shows", **self.current_filters)
-            else:
-                shows_result = await asyncio.to_thread(self.app.call_api, "get_all_shows")
-            
-            if shows_result and shows_result.get("success"):
-                shows = shows_result.get("data", [])
-                self.shows_cache[cache_key] = shows
-            else:
-                shows = []
-            
-        show = next((s for s in shows if s["show_id"] == show_id), None)
+    def handle_show_action(self, show_id: int) -> None:
+        """Handle show action (add or purchase)"""
+        show = next((s for s in self.shows_cache if s["show_id"] == show_id), None)
         
         if show:
             is_premium = show.get("access_group") == "Premium"
@@ -398,15 +383,15 @@ class MainScreen(Screen):
             else:
                 self.add_show_to_user(show_id)
 
-    def handle_show_action(self, show_id: int) -> None:
-        """Handle show action (add or buy)"""
-        self.handle_show_action_async(show_id)
+    def handle_remove_show(self, show_id: int) -> None:
+        """Handle show removal"""
+        self.check_user_shows_for_removal(show_id)
 
     @work(exclusive=True)
-    async def handle_remove_show_async(self, show_id: int):
-        """Handle show removal asynchronously"""
+    async def check_user_shows_for_removal(self, show_id: int):
+        """Check user shows for removal"""
         user_shows_result = await asyncio.to_thread(self.app.call_api, "get_user_shows", user_id=self.app.current_user.get("user_id"))
-        if user_shows_result and user_shows_result.get("success"):
+        if user_shows_result is not None and user_shows_result.get("success"):
             shows = user_shows_result.get("data", [])
             show = next((s for s in shows if s["show_id"] == show_id), None)
             
@@ -420,10 +405,6 @@ class MainScreen(Screen):
                     handle_modal_result
                 )
 
-    def handle_remove_show(self, show_id: int) -> None:
-        """Handle show removal"""
-        self.handle_remove_show_async(show_id)
-
     @work(exclusive=True)
     async def add_show_to_user(self, show_id: int):
         """Add show to user's collection asynchronously"""
@@ -433,21 +414,19 @@ class MainScreen(Screen):
             user_id=user_id, show_id=show_id
         )
         
-        if result and result.get("success"):
+        if result is not None and result.get("success"):
             self.notify("Show added successfully!", severity="information")
-            
-            # Update user info and clear cache
             user_info_result = await asyncio.to_thread(
                 self.app.call_api, "get_user_info", user_id=user_id
             )
-            if user_info_result and user_info_result.get("success"):
+            if user_info_result is not None and user_info_result.get("success"):
                 self.app.current_user.update(user_info_result.get("data", {}))
             
-            self.shows_cache.clear()
             if self.current_view == "shows":
-                self.load_shows()
+                self.refresh_shows_data()
         else:
-            self.notify("Failed to add show: " + result.get("message", "Unknown error"), severity="error")
+            error_msg = result.get("message", "Unknown error") if result else "API connection failed"
+            self.notify("Failed to add show: " + error_msg, severity="error")
 
     @work(exclusive=True)
     async def remove_show_from_user(self, show_id: int):
@@ -458,140 +437,154 @@ class MainScreen(Screen):
             user_id=user_id, show_id=show_id
         )
         
-        if result and result.get("success"):
+        if result is not None and result.get("success"):
             self.notify("Show removed successfully!", severity="information")
-            
-            # Update user info
             user_info_result = await asyncio.to_thread(
                 self.app.call_api, "get_user_info", user_id=user_id
             )
-            if user_info_result and user_info_result.get("success"):
+            if user_info_result is not None and user_info_result.get("success"):
                 self.app.current_user.update(user_info_result.get("data", {}))
             
             if self.current_view == "my_shows":
                 self.load_my_shows()
         else:
-            self.notify("Failed to remove show: " + result.get("message", "Unknown error"), severity="error")
+            error_msg = result.get("message", "Unknown error") if result else "API connection failed"
+            self.notify("Failed to remove show: " + error_msg, severity="error")
+
+    def clear_content_area(self):
+        """Safely clear content area"""
+        content = self.query_one("#content_area")
+        try:
+            content.remove_children()
+        except Exception:
+            pass
+        self.interface_built = False
+
+    def build_shows_interface(self):
+        """Build the shows interface once"""
+        if self.interface_built:
+            return
+            
+        content = self.query_one("#content_area")
+        genre_options = [("All", "All")] + [(g, g) for g in self.genres_cache]
+        rating_options = [("All", "All")] + [(r, r) for r in self.ratings_cache]
+        
+        interface_widgets = [
+            Static("Available Shows", classes="content_title"),
+            Input(placeholder="Search shows...", id="search_text", classes="search_input"),
+            Horizontal(
+                Select(genre_options, prompt="Genre", id="genre_filter", classes="filter_select"),
+                Select(rating_options, prompt="Rating", id="rating_filter", classes="filter_select"),
+                classes="filters_row"
+            ),
+            Container(id="shows_content_area", classes="shows_content")
+        ]
+        
+        for widget in interface_widgets:
+            content.mount(widget)
+        
+        self.interface_built = True
 
     @work(exclusive=True)
-    async def load_shows_async(self):
-        """Load shows asynchronously with optimized caching"""
+    async def refresh_shows_data(self):
+        """Refresh only the shows data without rebuilding interface"""
+        if not self.interface_built:
+            return
+            
         content = self.query_one("#content_area")
-        content.remove_children()
+        shows_content = content.query_one("#shows_content_area")
         
-        # Show loading indicator
-        content.mount(LoadingIndicator())
+        # Clear existing children and ensure no duplicate IDs
+        shows_content.remove_children()
+        
+        # Add loading indicator with unique ID using timestamp
+        import time
+        unique_id = f"shows_loading_{int(time.time() * 1000)}"
+        shows_content.mount(LoadingIndicator(id=unique_id))
         
         try:
-            cache_key = str(sorted(self.current_filters.items()))
-            
-            if cache_key not in self.shows_cache:
-                if self.current_filters:
-                    result = await asyncio.to_thread(self.app.call_api, "search_shows", **self.current_filters)
-                else:
-                    result = await asyncio.to_thread(self.app.call_api, "get_all_shows")
-                
-                if result and result.get("success"):
-                    self.shows_cache[cache_key] = result.get("data", [])
-                else:
-                    self.shows_cache[cache_key] = []
-            
-            shows = self.shows_cache[cache_key]
-            user_shows = self.app.current_user.get("shows", "").split(",") if self.app.current_user.get("shows") else []
-            user_show_ids = [int(x.strip()) for x in user_shows if x.strip()]
-            
-            content.remove_children()
-            
-            # Add title and filters
-            title = "Search Results" if self.current_filters else "Available Shows"
-            content.mount(Static(title, classes="content_title"))
-            
-            # Add filter controls in a horizontal layout
-            filter_container = Horizontal(classes="filter_container")
-            
-            # Genre filter
-            genre_options = [("All Genres", "all")] + [(genre, genre) for genre in self.genres_cache]
-            genre_select = Select(genre_options, id="genre_filter", classes="filter_select")
-            if "genre" in self.current_filters:
-                genre_select.value = self.current_filters["genre"]
-            
-            filter_container.mount(Label("Genre:", classes="filter_label"))
-            filter_container.mount(genre_select)
-            
-            # Rating filter
-            rating_options = [("All Ratings", "all")] + [(rating, rating) for rating in self.ratings_cache]
-            rating_select = Select(rating_options, id="rating_filter", classes="filter_select")
-            if "rating" in self.current_filters:
-                rating_select.value = self.current_filters["rating"]
-                
-            filter_container.mount(Label("Rating:", classes="filter_label"))
-            filter_container.mount(rating_select)
-            
-            # Text search
-            name_input = Input(placeholder="Search by name...", id="name_search", classes="search_input")
-            if "name" in self.current_filters:
-                name_input.value = self.current_filters["name"]
-                
-            filter_container.mount(Label("Search:", classes="filter_label"))
-            filter_container.mount(name_input)
-            
-            # Clear button
-            clear_button = Button("Clear", id="clear_search", variant="warning", classes="clear_button")
-            filter_container.mount(clear_button)
-            
-            content.mount(filter_container)
-            
-            if shows:
-                # Create grid for three shows per row
-                shows_grid = Grid(gutter=1, classes="shows_grid")
-                shows_grid.set_columns(3)
-                
-                for show in shows:
-                    already_owned = show["show_id"] in user_show_ids
-                    show_card = self.create_show_card(show, already_owned)
-                    shows_grid.mount(show_card)
-                
-                content.mount(ScrollableContainer(shows_grid, classes="shows_scroll"))
+            if self.current_search_filters:
+                result = await asyncio.to_thread(self.app.call_api, "search_shows", **self.current_search_filters)
             else:
-                content.mount(Static("No shows found", classes="empty_message"))
+                result = await asyncio.to_thread(self.app.call_api, "get_all_shows")
+            
+            # Remove loading indicator
+            try:
+                shows_content.query_one(f"#{unique_id}").remove()
+            except:
+                pass
+            
+            if result is not None and result.get("success"):
+                shows = result.get("data", [])
+                self.shows_cache = shows
+                user_shows = self.app.current_user.get("shows", "").split(",") if self.app.current_user.get("shows") else []
+                user_show_ids = [int(x.strip()) for x in user_shows if x.strip()]
+                
+                if shows:
+                    show_rows = []
+                    for i in range(0, len(shows), 3):
+                        row_shows = shows[i:i+3]
+                        row_cards = []
+                        for show in row_shows:
+                            row_cards.append(self.create_show_card(show, show["show_id"] in user_show_ids))
+                        
+                        show_rows.append(Horizontal(*row_cards, classes="shows_row"))
+                    
+                    shows_container = Vertical(*show_rows, classes="shows_main_container")
+                    shows_content.mount(shows_container)
+                else:
+                    shows_content.mount(Static("No shows found", classes="empty_message"))
+            else:
+                error_msg = result.get("message", "Failed to load shows") if result else "API connection failed"
+                shows_content.mount(Static(f"Error loading shows: {error_msg}", classes="error_message"))
                 
         except Exception as e:
-            content.remove_children()
-            content.mount(Static(f"Error loading shows: {e}", classes="error_message"))
+            try:
+                shows_content.query_one(f"#{unique_id}").remove()
+            except:
+                pass
+            shows_content.mount(Static(f"Error loading shows: {e}", classes="error_message"))
 
     def load_shows(self) -> None:
         """Load and display all shows"""
-        self.load_shows_async()
+        self.clear_content_area()
+        self.build_shows_interface()
+        self.refresh_shows_data()
 
     @work(exclusive=True)
     async def load_my_shows_async(self):
         """Load user's shows asynchronously"""
+        self.clear_content_area()
         content = self.query_one("#content_area")
-        content.remove_children()
+        
+        content.mount(Static("My Shows", classes="content_title"))
         content.mount(LoadingIndicator())
         
         user_id = self.app.current_user.get("user_id")
         result = await asyncio.to_thread(self.app.call_api, "get_user_shows", user_id=user_id)
-        content.remove_children()
         
+        content.remove_children()
         content.mount(Static("My Shows", classes="content_title"))
         
-        if result and result.get("success"):
+        if result is not None and result.get("success"):
             shows = result.get("data", [])
             if shows:
-                # Create grid for three shows per row
-                shows_grid = Grid(gutter=1, classes="shows_grid")
-                shows_grid.set_columns(3)
+                show_rows = []
+                for i in range(0, len(shows), 3):
+                    row_shows = shows[i:i+3]
+                    row_cards = []
+                    for show in row_shows:
+                        row_cards.append(self.create_my_show_card(show))
+                    
+                    show_rows.append(Horizontal(*row_cards, classes="shows_row"))
                 
-                for show in shows:
-                    show_card = self.create_my_show_card(show)
-                    shows_grid.mount(show_card)
-                
-                content.mount(ScrollableContainer(shows_grid, classes="shows_scroll"))
+                shows_container = Vertical(*show_rows, classes="shows_main_container")
+                content.mount(shows_container)
             else:
                 content.mount(Static("No shows found", classes="empty_message"))
         else:
-            content.mount(Static("Error loading shows", classes="error_message"))
+            error_msg = result.get("message", "Failed to load shows") if result else "API connection failed"
+            content.mount(Static(f"Error loading shows: {error_msg}", classes="error_message"))
 
     def load_my_shows(self) -> None:
         """Load and display user's shows"""
@@ -599,8 +592,8 @@ class MainScreen(Screen):
 
     def load_account(self) -> None:
         """Load and display account information"""
+        self.clear_content_area()
         content = self.query_one("#content_area")
-        content.remove_children()
         
         user = self.app.current_user
         
@@ -682,24 +675,22 @@ class ChangePasswordScreen(Screen):
     
     def compose(self) -> ComposeResult:
         yield Header()
-        with Center():
-            with Middle():
-                yield Container(
-                    Static("Change Password", classes="title"),
-                    Container(
-                        Label("New Password:"),
-                        Input(placeholder="Enter new password", password=True, id="new_password"),
-                        Label("Confirm Password:"),
-                        Input(placeholder="Confirm new password", password=True, id="confirm_password"),
-                        Horizontal(
-                            Button("Change Password", id="submit", variant="primary"),
-                            Button("Cancel", id="cancel", variant="default"),
-                            classes="button_row"
-                        ),
-                        classes="form_container"
-                    ),
-                    classes="main_container"
-                )
+        yield Container(
+            Static("Change Password", classes="title"),
+            Container(
+                Label("New Password:"),
+                Input(placeholder="Enter new password", password=True, id="new_password"),
+                Label("Confirm Password:"),
+                Input(placeholder="Confirm new password", password=True, id="confirm_password"),
+                Horizontal(
+                    Button("Change Password", id="submit", variant="primary"),
+                    Button("Cancel", id="cancel", variant="default"),
+                    classes="button_row"
+                ),
+                classes="form_container"
+            ),
+            classes="main_container_fullscreen"
+        )
         yield Footer()
 
     @work(exclusive=True)
@@ -711,11 +702,12 @@ class ChangePasswordScreen(Screen):
             user_id=user_id, new_password=new_password
         )
         
-        if result and result.get("success"):
+        if result is not None and result.get("success"):
             self.notify("Password changed successfully!", severity="information")
             self.app.pop_screen()
         else:
-            self.notify("Failed to change password: " + result.get("message", "Unknown error"), severity="error")
+            error_msg = result.get("message", "Unknown error") if result else "API connection failed"
+            self.notify("Failed to change password: " + error_msg, severity="error")
 
     def on_button_pressed(self, event: Button.Pressed) -> None:
         if event.button.id == "submit":
@@ -737,25 +729,23 @@ class MarketingPreferenceScreen(Screen):
     
     def compose(self) -> ComposeResult:
         yield Header()
-        with Center():
-            with Middle():
-                yield Container(
-                    Static("Marketing Preferences", classes="title"),
-                    Container(
-                        Label("Current Setting:"),
-                        Static(f"{'Opted In' if self.app.current_user.get('marketing_opt_in', False) else 'Opted Out'}", classes="current_sub"),
-                        Checkbox("I agree to receive marketing communications", 
-                                id="marketing_checkbox", 
-                                value=self.app.current_user.get('marketing_opt_in', False)),
-                        Horizontal(
-                            Button("Update Preference", id="submit", variant="primary"),
-                            Button("Cancel", id="cancel", variant="default"),
-                            classes="button_row"
-                        ),
-                        classes="form_container"
-                    ),
-                    classes="main_container"
-                )
+        yield Container(
+            Static("Marketing Preferences", classes="title"),
+            Container(
+                Label("Current Setting:"),
+                Static(f"{'Opted In' if self.app.current_user.get('marketing_opt_in', False) else 'Opted Out'}", classes="current_sub"),
+                Checkbox("I agree to receive marketing communications", 
+                        id="marketing_checkbox", 
+                        value=self.app.current_user.get('marketing_opt_in', False)),
+                Horizontal(
+                    Button("Update Preference", id="submit", variant="primary"),
+                    Button("Cancel", id="cancel", variant="default"),
+                    classes="button_row"
+                ),
+                classes="form_container"
+            ),
+            classes="main_container_fullscreen"
+        )
         yield Footer()
 
     @work(exclusive=True)
@@ -767,17 +757,17 @@ class MarketingPreferenceScreen(Screen):
             user_id=user_id, marketing_opt_in=marketing_opt_in
         )
         
-        if result and result.get("success"):
+        if result is not None and result.get("success"):
             self.app.current_user["marketing_opt_in"] = marketing_opt_in
             self.notify("Marketing preference updated successfully!", severity="information")
             self.app.pop_screen()
             
-            # Reload account page if it's currently displayed
             main_screen = self.app.screen_stack[-1]
             if hasattr(main_screen, 'load_account') and main_screen.current_view == "account":
                 main_screen.load_account()
         else:
-            self.notify("Failed to update preference: " + result.get("message", "Unknown error"), severity="error")
+            error_msg = result.get("message", "Unknown error") if result else "API connection failed"
+            self.notify("Failed to update preference: " + error_msg, severity="error")
 
     def on_button_pressed(self, event: Button.Pressed) -> None:
         if event.button.id == "submit":
@@ -791,25 +781,23 @@ class ChangeSubscriptionScreen(Screen):
     
     def compose(self) -> ComposeResult:
         yield Header()
-        with Center():
-            with Middle():
-                yield Container(
-                    Static("Change Subscription", classes="title"),
-                    Container(
-                        Label("Current Subscription:"),
-                        Static(f"{self.app.current_user.get('subscription_level', 'Unknown')}", classes="current_sub"),
-                        Label("New Subscription Level:"),
-                        Select([("Basic - $30", "Basic"), ("Premium - $80", "Premium")], id="subscription"),
-                        Static("Note: Premium to Basic is free, Basic to Premium costs $80", classes="pricing_note"),
-                        Horizontal(
-                            Button("Update Subscription", id="submit", variant="primary"),
-                            Button("Cancel", id="cancel", variant="default"),
-                            classes="button_row"
-                        ),
-                        classes="form_container"
-                    ),
-                    classes="main_container"
-                )
+        yield Container(
+            Static("Change Subscription", classes="title"),
+            Container(
+                Label("Current Subscription:"),
+                Static(f"{self.app.current_user.get('subscription_level', 'Unknown')}", classes="current_sub"),
+                Label("New Subscription Level:"),
+                Select([("Basic - $30", "Basic"), ("Premium - $80", "Premium")], id="subscription"),
+                Static("Note: Premium to Basic is free, Basic to Premium costs $80", classes="pricing_note"),
+                Horizontal(
+                    Button("Update Subscription", id="submit", variant="primary"),
+                    Button("Cancel", id="cancel", variant="default"),
+                    classes="button_row"
+                ),
+                classes="form_container"
+            ),
+            classes="main_container_fullscreen"
+        )
         yield Footer()
 
     @work(exclusive=True)
@@ -821,27 +809,26 @@ class ChangeSubscriptionScreen(Screen):
             user_id=user_id, subscription_level=subscription
         )
         
-        if result and result.get("success"):
-            # Update user data immediately
+        if result is not None and result.get("success"):
             user_info_result = await asyncio.to_thread(
                 self.app.call_api, "get_user_info", user_id=user_id
             )
-            if user_info_result and user_info_result.get("success"):
+            if user_info_result is not None and user_info_result.get("success"):
                 self.app.current_user.update(user_info_result.get("data", {}))
             
-            charged = result.get("data", {}).get("charged", 0)
+            charged = result.get("data", {}).get("charged", 0) if result.get("data") else 0
             if charged > 0:
                 self.notify(f"Subscription updated successfully! Charged: ${charged:.2f}", severity="information")
             else:
                 self.notify("Subscription updated successfully!", severity="information")
             self.app.pop_screen()
             
-            # Force reload of the account view if it's currently displayed
             main_screen = self.app.screen_stack[-1]
             if hasattr(main_screen, 'load_account') and main_screen.current_view == "account":
                 main_screen.load_account()
         else:
-            self.notify("Failed to update subscription: " + result.get("message", "Unknown error"), severity="error")
+            error_msg = result.get("message", "Unknown error") if result else "API connection failed"
+            self.notify("Failed to update subscription: " + error_msg, severity="error")
 
     def on_button_pressed(self, event: Button.Pressed) -> None:
         if event.button.id == "submit":
@@ -855,14 +842,14 @@ class ChangeSubscriptionScreen(Screen):
             self.app.pop_screen()
 
 class EasyFlixUserApp(App):
-    """Main EasyFlix User Application with optimized performance"""
+    """Main EasyFlix User Application"""
     
     CSS = """
     Screen {
         background: #2F2F2F;
         color: white;
-        width: 100vw;
-        height: 100vh;
+        width: 100%;
+        height: 100%;
     }
     
     .title {
@@ -882,8 +869,8 @@ class EasyFlixUserApp(App):
     
     .login_container {
         align: center middle;
-        width: 100vw;
-        height: 100vh;
+        width: 100%;
+        height: 100%;
         background: #404040;
         border: solid #FF8C00;
         padding: 4;
@@ -893,30 +880,26 @@ class EasyFlixUserApp(App):
         align: center middle;
         height: auto;
         margin: 2;
-        width: 100%;
     }
     
-    .main_container {
+    .main_container_fullscreen {
         align: center middle;
         width: 100vw;
         height: 100vh;
         background: #404040;
         border: solid #FF8C00;
-        padding: 2;
     }
     
     .form_container {
         padding: 2;
         height: auto;
         width: 100%;
-        max-width: 400;
     }
     
     .button_row {
         margin-top: 2;
         height: auto;
         align: center middle;
-        width: 100%;
     }
     
     .pricing_note {
@@ -936,16 +919,28 @@ class EasyFlixUserApp(App):
         border: solid #FF8C00;
     }
     
+    .search_input {
+        width: 100%;
+        margin: 1 0;
+        height: 3;
+    }
+    
     Label {
         margin: 1 0 0 1;
         color: white;
     }
     
     Select {
-        margin: 1;
+        margin: 0 1;
         background: #2F2F2F;
         border: solid #696969;
-        width: 100%;
+        width: 1fr;
+    }
+    
+    .filter_select {
+        margin: 0 1;
+        width: 1fr;
+        min-width: 15;
     }
     
     Checkbox {
@@ -960,8 +955,8 @@ class EasyFlixUserApp(App):
     }
     
     .main_layout {
-        height: 100vh;
-        width: 100vw;
+        height: 100%;
+        width: 100%;
     }
     
     .sidebar {
@@ -971,7 +966,7 @@ class EasyFlixUserApp(App):
         border-right: solid #FF8C00;
         align: center top;
         text-align: center;
-        height: 100vh;
+        height: 100%;
     }
     
     .sidebar_button {
@@ -998,55 +993,39 @@ class EasyFlixUserApp(App):
     .content {
         width: 80%;
         padding: 1;
-        height: 100vh;
+        height: 100%;
     }
     
-    .filter_container {
-        background: #404040;
-        border: solid #696969;
-        padding: 1;
-        margin: 1;
-        height: auto;
-        width: 100%;
-    }
-    
-    .filter_label {
-        margin: 0 1 0 0;
-        color: #FF8C00;
-        text-style: bold;
-    }
-    
-    .filter_select {
-        width: 15%;
-        margin: 0 1 0 0;
-    }
-    
-    .search_input {
-        width: 25%;
-        margin: 0 1 0 0;
-    }
-    
-    .clear_button {
-        margin: 0;
-    }
-    
-    .shows_grid {
+    .filters_row {
         width: 100%;
         height: auto;
+        margin: 1 0;
     }
     
-    .shows_scroll {
-        height: 80vh;
+    .shows_content {
         width: 100%;
+        height: 1fr;
+    }
+    
+    .shows_main_container {
+        width: 100%;
+        height: 1fr;
+        overflow-y: auto;
+    }
+    
+    .shows_row {
+        width: 100%;
+        height: auto;
+        margin: 1 0;
     }
     
     .show_card {
         background: #404040;
         border: solid #696969;
-        margin: 1;
+        margin: 0 1;
         padding: 1;
-        height: 15;
-        width: 100%;
+        height: auto;
+        width: 1fr;
     }
     
     .basic_card {
@@ -1066,7 +1045,6 @@ class EasyFlixUserApp(App):
         text-style: bold;
         color: #FF8C00;
         margin-bottom: 1;
-        text-align: center;
     }
     
     .show_info {
@@ -1084,7 +1062,6 @@ class EasyFlixUserApp(App):
     .basic_button {
         background: #FF8C00;
         margin-top: 1;
-        width: 100%;
     }
     
     .basic_button:hover {
@@ -1096,7 +1073,6 @@ class EasyFlixUserApp(App):
         background: #FFD700;
         color: black;
         margin-top: 1;
-        width: 100%;
     }
     
     .premium_button:hover {
@@ -1107,7 +1083,6 @@ class EasyFlixUserApp(App):
     .premium_included {
         background: #32CD32;
         margin-top: 1;
-        width: 100%;
     }
     
     .premium_included:hover {
@@ -1119,7 +1094,6 @@ class EasyFlixUserApp(App):
         background: #696969;
         color: #A0A0A0;
         margin-top: 1;
-        width: 100%;
     }
     
     .remove_button {
@@ -1161,10 +1135,10 @@ class EasyFlixUserApp(App):
     .loading_container {
         background: #404040;
         border: solid #FF8C00;
-        width: 80%;
+        width: 50vw;
         height: auto;
         align: center middle;
-        padding: 4;
+        padding: 2;
     }
     
     .loading_text {
@@ -1174,7 +1148,7 @@ class EasyFlixUserApp(App):
         margin-bottom: 1;
     }
     
-    .modal_container {
+    .modal_container_fullscreen {
         background: #404040;
         border: solid #FF8C00;
         width: 100vw;
