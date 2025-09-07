@@ -179,6 +179,27 @@ class EFAPI_Commands:
         thread.daemon = True
         thread.start()
     
+    def authenticate_admin(self, username: str, password: str) -> str:
+        """Authenticate admin credentials"""
+        try:
+            # Hardcoded admin credentials
+            admin_username = "EF@dm1n"
+            admin_password = "EFP@55"
+            
+            if username == admin_username and password == admin_password:
+                admin_data = {
+                    "admin_id": 1,
+                    "username": admin_username,
+                    "role": "admin",
+                    "access_level": "full"
+                }
+                return self._format_response(True, admin_data, "Admin authentication successful")
+            else:
+                return self._format_response(False, message="Invalid admin credentials")
+                
+        except Exception as e:
+            return self._format_response(False, message=f"Admin authentication error: {e}")
+    
     def authenticate_user(self, username: str, password: str) -> str:
         """Authenticate user credentials"""
         try:
