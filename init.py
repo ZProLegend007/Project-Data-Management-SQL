@@ -113,23 +113,27 @@ class DatabaseInitialiser:
         )
         ''')
         
-        # STATISTICS table
+        # STATISTICS table with separate premium and basic subscription tracking
         cursor.execute('''
         CREATE TABLE IF NOT EXISTS STATISTICS (
             Date DATE PRIMARY KEY,
             Total_Shows_Bought INTEGER DEFAULT 0,
             Total_Subscriptions INTEGER DEFAULT 0,
+            Premium_Subscriptions INTEGER DEFAULT 0,
+            Basic_Subscriptions INTEGER DEFAULT 0,
             Total_Users INTEGER DEFAULT 0,
             Last_Updated DATETIME NOT NULL
         )
         ''')
         
-        # FINANCIALS table
+        # FINANCIALS table with separate premium and basic subscription revenue
         cursor.execute('''
         CREATE TABLE IF NOT EXISTS FINANCIALS (
             Date DATE PRIMARY KEY,
             Total_Revenue_Buys DECIMAL(10,2) DEFAULT 0.00,
             Total_Revenue_Subscriptions DECIMAL(10,2) DEFAULT 0.00,
+            Premium_Subscription_Revenue DECIMAL(10,2) DEFAULT 0.00,
+            Basic_Subscription_Revenue DECIMAL(10,2) DEFAULT 0.00,
             Total_Combined_Revenue DECIMAL(10,2) DEFAULT 0.00,
             Last_Updated DATETIME NOT NULL
         )
@@ -228,15 +232,15 @@ class DatabaseInitialiser:
         # Initialise statistics
         cursor.execute('''
         INSERT OR REPLACE INTO STATISTICS 
-        (Date, Total_Shows_Bought, Total_Subscriptions, Total_Users, Last_Updated)
-        VALUES (?, 0, 0, 0, ?)
+        (Date, Total_Shows_Bought, Total_Subscriptions, Premium_Subscriptions, Basic_Subscriptions, Total_Users, Last_Updated)
+        VALUES (?, 0, 0, 0, 0, 0, ?)
         ''', (today, now))
         
         # Initialise financials
         cursor.execute('''
         INSERT OR REPLACE INTO FINANCIALS 
-        (Date, Total_Revenue_Buys, Total_Revenue_Subscriptions, Total_Combined_Revenue, Last_Updated)
-        VALUES (?, 0.00, 0.00, 0.00, ?)
+        (Date, Total_Revenue_Buys, Total_Revenue_Subscriptions, Premium_Subscription_Revenue, Basic_Subscription_Revenue, Total_Combined_Revenue, Last_Updated)
+        VALUES (?, 0.00, 0.00, 0.00, 0.00, 0.00, ?)
         ''', (today, now))
         
         conn.commit()
