@@ -11,6 +11,7 @@ import hashlib
 import os
 import sys
 import asyncio
+import threading
 from datetime import date, datetime
 from typing import Dict, List, Optional, Any
 
@@ -58,98 +59,94 @@ class EFAPI_Commands:
         }
         return json.dumps(response, indent=2, default=str)
     
-    async def _update_statistics_and_finances(self):
-        """Update statistics, finances and favourite genres asynchronously"""
-        try:
-            conn = self._get_connection()
-            cursor = conn.cursor()
-            today = date.today()
-            now = datetime.now()
-            
-            # Calculate current statistics
-            cursor.execute("SELECT COUNT(*) FROM CUSTOMERS")
-            total_users = cursor.fetchone()[0]
-            
-            cursor.execute("SELECT COUNT(*) FROM CUSTOMERS WHERE Subscription_Level = 'Premium'")
-            premium_subs = cursor.fetchone()[0]
-            
-            cursor.execute("SELECT COUNT(*) FROM CUSTOMERS WHERE Subscription_Level = 'Basic'")
-            basic_subs = cursor.fetchone()[0]
-            
-            cursor.execute("SELECT COUNT(*) FROM BUYS WHERE Buy_Date = ?", (today,))
-            shows_bought_today = cursor.fetchone()[0]
-            
-            # Calculate revenue
-            cursor.execute("SELECT COALESCE(SUM(Cost), 0) FROM BUYS WHERE Buy_Date = ?", (today,))
-            revenue_buys = cursor.fetchone()[0]
-            
-            cursor.execute("SELECT COALESCE(SUM(Total_Spent), 0) FROM CUSTOMERS WHERE DATE(?) = DATE(?)", (now, now))
-            revenue_subscriptions = 0  # This would be calculated based on new subscriptions
-            
-            # Get subscription revenue from today's user creations (approximation)
-            cursor.execute("""
-                SELECT COALESCE(SUM(
-                    CASE 
-                        WHEN Subscription_Level = 'Basic' THEN 30.00
-                        WHEN Subscription_Level = 'Premium' THEN 80.00
-                        ELSE 0
-                    END
-                ), 0) 
-                FROM CUSTOMERS 
-                WHERE DATE(?) = DATE(?)
-            """, (now, now))
-            
-            total_combined = revenue_buys + revenue_subscriptions
-            
-            # Update statistics
-            cursor.execute("""
+    def _update_statistics_async(self):
+        """Update statistics and financials asynchronously"""
+        def update_stats():
+            try:
+                conn = self._get_connection()
+                cursor = conn.cursor()
+                
+                today = date.today()
+                now = datetime.now()
+                
+                # Calculate total users
+                cursor.execute("SELECT COUNT(*) FROM CUSTOMERS")
+                total_users = cursor.fetchone()[0]
+                
+                # Calculate total subscriptions
+                cursor.execute("SELECT COUNT(*) FROM CUSTOMERS WHERE Subscription_Level = 'Premium'")
+                premium_subs = cursor.fetchone()[0]
+                cursor.execute("SELECT COUNT(*) FROM CUSTOMERS WHERE Subscription_Level = 'Basic'")
+                basic_subs = cursor.fetchone()[0]
+                total_subscriptions = premium_subs + basic_subs
+                
+                # Calculate total shows bought
+                cursor.execute("SELECT COUNT(*) FROM BUYS")
+                total_shows_bought = cursor.fetchone()[0]
+                
+                # Calculate revenues
+                cursor.execute("SELECT COALESCE(SUM(Cost), 0) FROM BUYS")
+                total_revenue_buys = cursor.fetchone()[0]
+                
+                # Calculate subscription revenue (Basic: $30, Premium: $80)
+                subscription_revenue = (basic_subs * 30.0) + (premium_subs * 80.0)
+                total_combined_revenue = total_revenue_buys + subscription_revenue
+                
+                # Update statistics
+                cursor.execute('''
                 INSERT OR REPLACE INTO STATISTICS 
                 (Date, Total_Shows_Bought, Total_Subscriptions, Total_Users, Last_Updated)
                 VALUES (?, ?, ?, ?, ?)
-            """, (today, shows_bought_today, premium_subs + basic_subs, total_users, now))
-            
-            # Update finances
-            cursor.execute("""
+                ''', (today, total_shows_bought, total_subscriptions, total_users, now))
+                
+                # Update financials
+                cursor.execute('''
                 INSERT OR REPLACE INTO FINANCIALS 
                 (Date, Total_Revenue_Buys, Total_Revenue_Subscriptions, Total_Combined_Revenue, Last_Updated)
                 VALUES (?, ?, ?, ?, ?)
-            """, (today, revenue_buys, revenue_subscriptions, total_combined, now))
-            
-            # Update favourite genres for opted-in users
-            cursor.execute("""
+                ''', (today, total_revenue_buys, subscription_revenue, total_combined_revenue, now))
+                
+                # Update favourite genres for users opted into marketing
+                cursor.execute('''
                 SELECT User_ID, Shows FROM CUSTOMERS 
                 WHERE Marketing_Opt_In = 1 AND Shows IS NOT NULL AND Shows != ''
-            """)
-            
-            users_shows = cursor.fetchall()
-            for user_id, shows in users_shows:
-                if shows:
-                    show_ids = [int(x.strip()) for x in shows.split(',') if x.strip()]
-                    if show_ids:
-                        placeholders = ','.join(['?' for _ in show_ids])
-                        cursor.execute(f"""
-                            SELECT Genre, COUNT(*) as count 
-                            FROM SHOWS 
-                            WHERE Show_ID IN ({placeholders})
-                            GROUP BY Genre 
-                            ORDER BY count DESC 
-                            LIMIT 1
-                        """, show_ids)
-                        
-                        result = cursor.fetchone()
-                        if result:
-                            favourite_genre = result[0]
-                            cursor.execute("""
-                                UPDATE CUSTOMERS 
-                                SET Favourite_Genre = ? 
-                                WHERE User_ID = ?
-                            """, (favourite_genre, user_id))
-            
-            conn.commit()
-            conn.close()
-            
-        except Exception as e:
-            print(f"Error updating statistics: {e}")
+                ''')
+                
+                users_with_shows = cursor.fetchall()
+                for user_id, shows_str in users_with_shows:
+                    if shows_str:
+                        show_ids = [int(x.strip()) for x in shows_str.split(',') if x.strip()]
+                        if show_ids:
+                            # Get genres for user's shows
+                            placeholders = ','.join(['?' for _ in show_ids])
+                            cursor.execute(f'''
+                            SELECT Genre FROM SHOWS WHERE Show_ID IN ({placeholders})
+                            ''', show_ids)
+                            
+                            genres = [row[0] for row in cursor.fetchall()]
+                            if genres:
+                                # Find most common genre
+                                genre_counts = {}
+                                for genre in genres:
+                                    genre_counts[genre] = genre_counts.get(genre, 0) + 1
+                                
+                                favourite_genre = max(genre_counts, key=genre_counts.get)
+                                
+                                # Update user's favourite genre
+                                cursor.execute('''
+                                UPDATE CUSTOMERS SET Favourite_Genre = ? WHERE User_ID = ?
+                                ''', (favourite_genre, user_id))
+                
+                conn.commit()
+                conn.close()
+                
+            except Exception as e:
+                print(f"Error updating statistics: {e}")
+        
+        # Run in separate thread to not block main execution
+        thread = threading.Thread(target=update_stats)
+        thread.daemon = True
+        thread.start()
     
     def authenticate_user(self, username: str, password: str) -> str:
         """Authenticate user credentials"""
@@ -221,7 +218,7 @@ class EFAPI_Commands:
             conn.close()
             
             # Update statistics asynchronously
-            asyncio.create_task(self._update_statistics_and_finances())
+            self._update_statistics_async()
             
             return self._format_response(True, {"user_id": user_id, "charged": subscription_cost}, "User created successfully")
             
@@ -276,8 +273,8 @@ class EFAPI_Commands:
             params = []
             
             if genre:
-                query += " AND Genre LIKE ?"
-                params.append(f"%{genre}%")
+                query += " AND Genre = ?"
+                params.append(genre)
             
             if rating:
                 query += " AND Rating = ?"
@@ -349,6 +346,36 @@ class EFAPI_Commands:
         except Exception as e:
             return self._format_response(False, message=f"Error retrieving shows: {e}")
     
+    def get_available_genres(self) -> str:
+        """Get all available genres"""
+        try:
+            conn = self._get_connection()
+            cursor = conn.cursor()
+            
+            cursor.execute("SELECT DISTINCT Genre FROM SHOWS ORDER BY Genre")
+            genres = [row[0] for row in cursor.fetchall()]
+            
+            conn.close()
+            return self._format_response(True, genres, f"Retrieved {len(genres)} genres")
+            
+        except Exception as e:
+            return self._format_response(False, message=f"Error retrieving genres: {e}")
+    
+    def get_available_ratings(self) -> str:
+        """Get all available ratings"""
+        try:
+            conn = self._get_connection()
+            cursor = conn.cursor()
+            
+            cursor.execute("SELECT DISTINCT Rating FROM SHOWS ORDER BY Rating")
+            ratings = [row[0] for row in cursor.fetchall()]
+            
+            conn.close()
+            return self._format_response(True, ratings, f"Retrieved {len(ratings)} ratings")
+            
+        except Exception as e:
+            return self._format_response(False, message=f"Error retrieving ratings: {e}")
+    
     def get_user_info(self, user_id: int) -> str:
         """Get user information"""
         try:
@@ -413,7 +440,7 @@ class EFAPI_Commands:
             conn.close()
             
             # Update statistics asynchronously
-            asyncio.create_task(self._update_statistics_and_finances())
+            self._update_statistics_async()
             
             return self._format_response(True, {"charged": charge}, "Subscription updated successfully")
                 
@@ -437,7 +464,7 @@ class EFAPI_Commands:
                 conn.close()
                 
                 # Update statistics asynchronously
-                asyncio.create_task(self._update_statistics_and_finances())
+                self._update_statistics_async()
                 
                 return self._format_response(True, message="Marketing preference updated successfully")
             else:
@@ -514,7 +541,7 @@ class EFAPI_Commands:
             conn.close()
             
             # Update statistics asynchronously
-            asyncio.create_task(self._update_statistics_and_finances())
+            self._update_statistics_async()
             
             return self._format_response(True, message="Show added successfully")
             
@@ -562,7 +589,7 @@ class EFAPI_Commands:
             conn.close()
             
             # Update statistics asynchronously
-            asyncio.create_task(self._update_statistics_and_finances())
+            self._update_statistics_async()
             
             return self._format_response(True, message="Show removed successfully")
             
@@ -743,7 +770,7 @@ class EFAPI_Commands:
                 conn.close()
                 
                 # Update statistics asynchronously
-                asyncio.create_task(self._update_statistics_and_finances())
+                self._update_statistics_async()
                 
                 return self._format_response(True, message="User account deleted successfully")
             else:
@@ -796,6 +823,9 @@ class EFAPI_Commands:
             conn.commit()
             conn.close()
             
+            # Update statistics asynchronously
+            self._update_statistics_async()
+            
             return self._format_response(True, {"show_id": show_id}, "Show added successfully")
             
         except Exception as e:
@@ -825,7 +855,7 @@ class EFAPI_Commands:
             return self._format_response(False, message=f"Error updating show access: {e}")
     
     def update_show_cost(self, show_id: int, cost_to_buy: float) -> str:
-        """Update show buy cost"""
+        """Update show purchase cost"""
         try:
             conn = self._get_connection()
             cursor = conn.cursor()
@@ -839,7 +869,7 @@ class EFAPI_Commands:
             if cursor.rowcount > 0:
                 conn.commit()
                 conn.close()
-                return self._format_response(True, message="Show buy cost updated successfully")
+                return self._format_response(True, message="Show purchase cost updated successfully")
             else:
                 conn.close()
                 return self._format_response(False, message="Show not found")
@@ -929,6 +959,10 @@ class EFAPI_Commands:
             if cursor.rowcount > 0:
                 conn.commit()
                 conn.close()
+                
+                # Update statistics asynchronously
+                self._update_statistics_async()
+                
                 return self._format_response(True, message="Favourite genre updated successfully")
             else:
                 conn.close()
@@ -936,46 +970,6 @@ class EFAPI_Commands:
                 
         except Exception as e:
             return self._format_response(False, message=f"Error updating favourite genre: {e}")
-
-    def get_unique_genres(self) -> str:
-        """Get all unique genres from shows"""
-        try:
-            conn = self._get_connection()
-            cursor = conn.cursor()
-            
-            cursor.execute("""
-                SELECT DISTINCT Genre 
-                FROM SHOWS 
-                ORDER BY Genre
-            """)
-            
-            genres = [row[0] for row in cursor.fetchall()]
-            conn.close()
-            
-            return self._format_response(True, genres, f"Retrieved {len(genres)} genres")
-            
-        except Exception as e:
-            return self._format_response(False, message=f"Error retrieving genres: {e}")
-    
-    def get_unique_ratings(self) -> str:
-        """Get all unique ratings from shows"""
-        try:
-            conn = self._get_connection()
-            cursor = conn.cursor()
-            
-            cursor.execute("""
-                SELECT DISTINCT Rating 
-                FROM SHOWS 
-                ORDER BY Rating
-            """)
-            
-            ratings = [row[0] for row in cursor.fetchall()]
-            conn.close()
-            
-            return self._format_response(True, ratings, f"Retrieved {len(ratings)} ratings")
-            
-        except Exception as e:
-            return self._format_response(False, message=f"Error retrieving ratings: {e}")
 
 def main():
     parser = argparse.ArgumentParser(description="EasyFlix API")
@@ -995,7 +989,7 @@ def main():
     parser.add_argument('--director', help='Show director')
     parser.add_argument('--length', type=int, help='Show length in minutes')
     parser.add_argument('--genre', help='Show genre')
-    parser.add_argument('--cost_to_buy', type=float, help='Show buy cost')
+    parser.add_argument('--cost_to_buy', type=float, help='Show purchase cost')
     parser.add_argument('--buy_id', type=int, help='Buy ID')
     parser.add_argument('--favourite_genre', help='User favourite genre')
     parser.add_argument('--marketing_opt_in', action='store_true', help='Marketing opt-in flag')
