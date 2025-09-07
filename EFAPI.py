@@ -478,7 +478,7 @@ class EFAPI_Commands:
         except Exception as e:
             return self._format_response(False, message=f"Error updating subscription: {e}")
     
-    def update_marketing_opt_in(self, user_id: int, marketing_opt_in: bool) -> str:
+    def update_marketing_opt_in(self, user_id: int, marketing_opt_in: bool = False) -> str:
         """Update user marketing opt-in preference"""
         try:
             conn = self._get_connection()
@@ -1032,7 +1032,7 @@ def main():
     parser.add_argument('--cost_to_buy', type=float, help='Show purchase cost')
     parser.add_argument('--buy_id', type=int, help='Buy ID')
     parser.add_argument('--favourite_genre', help='User favourite genre')
-    parser.add_argument('--marketing_opt_in', action='store_true', help='Marketing opt-in flag')
+    parser.add_argument('--marketing_opt_in', type=bool, default=False, help='Marketing opt-in flag')
     parser.add_argument('--year', type=int, help='Release year for search')
         
     args = parser.parse_args()
@@ -1084,7 +1084,7 @@ def main():
             kwargs['buy_id'] = args.buy_id
         if args.favourite_genre:
             kwargs['favourite_genre'] = args.favourite_genre
-        if args.marketing_opt_in:
+        if hasattr(args, 'marketing_opt_in'):
             kwargs['marketing_opt_in'] = args.marketing_opt_in
         if args.year:
             kwargs['year'] = args.year
