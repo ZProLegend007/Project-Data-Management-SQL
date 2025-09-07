@@ -73,7 +73,7 @@ class EFAPI_Commands:
                 cursor.execute("SELECT COUNT(*) FROM CUSTOMERS")
                 total_users = cursor.fetchone()[0]
                 
-                # Calculate total subscriptions
+                # Calculate subscription counts
                 cursor.execute("SELECT COUNT(*) FROM CUSTOMERS WHERE Subscription_Level = 'Premium'")
                 premium_subs = cursor.fetchone()[0]
                 cursor.execute("SELECT COUNT(*) FROM CUSTOMERS WHERE Subscription_Level = 'Basic'")
@@ -88,23 +88,54 @@ class EFAPI_Commands:
                 cursor.execute("SELECT COALESCE(SUM(Cost), 0) FROM BUYS")
                 total_revenue_buys = cursor.fetchone()[0]
                 
-                # Calculate subscription revenue (Basic: $30, Premium: $80)
-                subscription_revenue = (basic_subs * 30.0) + (premium_subs * 80.0)
-                total_combined_revenue = total_revenue_buys + subscription_revenue
+                # Calculate subscription revenues (Basic: $30, Premium: $80)
+                basic_subscription_revenue = basic_subs * 30.0
+                premium_subscription_revenue = premium_subs * 80.0
+                total_subscription_revenue = basic_subscription_revenue + premium_subscription_revenue
+                total_combined_revenue = total_revenue_buys + total_subscription_revenue
                 
-                # Update statistics
-                cursor.execute('''
-                INSERT OR REPLACE INTO STATISTICS 
-                (Date, Total_Shows_Bought, Total_Subscriptions, Total_Users, Last_Updated)
-                VALUES (?, ?, ?, ?, ?)
-                ''', (today, total_shows_bought, total_subscriptions, total_users, now))
+                # Check if record exists for today
+                cursor.execute('SELECT Date FROM STATISTICS WHERE Date = ?', (today,))
+                stats_exists = cursor.fetchone() is not None
                 
-                # Update financials
-                cursor.execute('''
-                INSERT OR REPLACE INTO FINANCIALS 
-                (Date, Total_Revenue_Buys, Total_Revenue_Subscriptions, Total_Combined_Revenue, Last_Updated)
-                VALUES (?, ?, ?, ?, ?)
-                ''', (today, total_revenue_buys, subscription_revenue, total_combined_revenue, now))
+                if stats_exists:
+                    # Update existing record
+                    cursor.execute('''
+                    UPDATE STATISTICS 
+                    SET Total_Shows_Bought = ?, Total_Subscriptions = ?, Premium_Subscriptions = ?, 
+                        Basic_Subscriptions = ?, Total_Users = ?, Last_Updated = ?
+                    WHERE Date = ?
+                    ''', (total_shows_bought, total_subscriptions, premium_subs, basic_subs, total_users, now, today))
+                else:
+                    # Insert new record
+                    cursor.execute('''
+                    INSERT INTO STATISTICS 
+                    (Date, Total_Shows_Bought, Total_Subscriptions, Premium_Subscriptions, Basic_Subscriptions, Total_Users, Last_Updated)
+                    VALUES (?, ?, ?, ?, ?, ?, ?)
+                    ''', (today, total_shows_bought, total_subscriptions, premium_subs, basic_subs, total_users, now))
+                
+                # Check if financials record exists for today
+                cursor.execute('SELECT Date FROM FINANCIALS WHERE Date = ?', (today,))
+                financials_exists = cursor.fetchone() is not None
+                
+                if financials_exists:
+                    # Update existing record
+                    cursor.execute('''
+                    UPDATE FINANCIALS 
+                    SET Total_Revenue_Buys = ?, Total_Revenue_Subscriptions = ?, Premium_Subscription_Revenue = ?,
+                        Basic_Subscription_Revenue = ?, Total_Combined_Revenue = ?, Last_Updated = ?
+                    WHERE Date = ?
+                    ''', (total_revenue_buys, total_subscription_revenue, premium_subscription_revenue, 
+                          basic_subscription_revenue, total_combined_revenue, now, today))
+                else:
+                    # Insert new record
+                    cursor.execute('''
+                    INSERT INTO FINANCIALS 
+                    (Date, Total_Revenue_Buys, Total_Revenue_Subscriptions, Premium_Subscription_Revenue, 
+                     Basic_Subscription_Revenue, Total_Combined_Revenue, Last_Updated)
+                    VALUES (?, ?, ?, ?, ?, ?, ?)
+                    ''', (today, total_revenue_buys, total_subscription_revenue, premium_subscription_revenue,
+                          basic_subscription_revenue, total_combined_revenue, now))
                 
                 # Update favourite genres for users opted into marketing
                 cursor.execute('''
@@ -211,7 +242,7 @@ class EFAPI_Commands:
             cursor.execute("""
                 INSERT INTO CUSTOMERS (Username, Email, Password_Hash, Salt, Subscription_Level, Total_Spent, Favourite_Genre, Shows, Marketing_Opt_In)
                 VALUES (?, ?, ?, ?, ?, ?, '', '', ?)
-            """, (username, email, password_hash, salt, subscription_level, subscription_cost, marketing_opt_in))
+            """, (username, email, password_hash, salt, subscription_level, subscription_cost, int(marketing_opt_in)))
             
             user_id = cursor.lastrowid
             conn.commit()
@@ -457,7 +488,7 @@ class EFAPI_Commands:
                 UPDATE CUSTOMERS 
                 SET Marketing_Opt_In = ?
                 WHERE User_ID = ?
-            """, (marketing_opt_in, user_id))
+            """, (int(marketing_opt_in), user_id))
             
             if cursor.rowcount > 0:
                 conn.commit()
@@ -683,7 +714,8 @@ class EFAPI_Commands:
             cursor = conn.cursor()
             
             cursor.execute("""
-                SELECT Date, Total_Shows_Bought, Total_Subscriptions, Total_Users, Last_Updated
+                SELECT Date, Total_Shows_Bought, Total_Subscriptions, Premium_Subscriptions, 
+                       Basic_Subscriptions, Total_Users, Last_Updated
                 FROM STATISTICS
                 ORDER BY Date DESC
                 LIMIT 1
@@ -693,6 +725,7 @@ class EFAPI_Commands:
             
             cursor.execute("""
                 SELECT Date, Total_Revenue_Buys, Total_Revenue_Subscriptions, 
+                       Premium_Subscription_Revenue, Basic_Subscription_Revenue,
                        Total_Combined_Revenue, Last_Updated
                 FROM FINANCIALS
                 ORDER BY Date DESC
@@ -707,15 +740,19 @@ class EFAPI_Commands:
                     "date": stats_row[0] if stats_row else None,
                     "total_shows_bought": stats_row[1] if stats_row else 0,
                     "total_subscriptions": stats_row[2] if stats_row else 0,
-                    "total_users": stats_row[3] if stats_row else 0,
-                    "last_updated": stats_row[4] if stats_row else None
+                    "premium_subscriptions": stats_row[3] if stats_row else 0,
+                    "basic_subscriptions": stats_row[4] if stats_row else 0,
+                    "total_users": stats_row[5] if stats_row else 0,
+                    "last_updated": stats_row[6] if stats_row else None
                 },
                 "financials": {
                     "date": finance_row[0] if finance_row else None,
                     "total_revenue_buys": finance_row[1] if finance_row else 0.00,
                     "total_revenue_subscriptions": finance_row[2] if finance_row else 0.00,
-                    "total_combined_revenue": finance_row[3] if finance_row else 0.00,
-                    "last_updated": finance_row[4] if finance_row else None
+                    "premium_subscription_revenue": finance_row[3] if finance_row else 0.00,
+                    "basic_subscription_revenue": finance_row[4] if finance_row else 0.00,
+                    "total_combined_revenue": finance_row[5] if finance_row else 0.00,
+                    "last_updated": finance_row[6] if finance_row else None
                 }
             }
             
@@ -732,6 +769,7 @@ class EFAPI_Commands:
             
             cursor.execute("""
                 SELECT Date, Total_Revenue_Buys, Total_Revenue_Subscriptions, 
+                       Premium_Subscription_Revenue, Basic_Subscription_Revenue,
                        Total_Combined_Revenue, Last_Updated
                 FROM FINANCIALS
                 ORDER BY Date DESC
@@ -743,8 +781,10 @@ class EFAPI_Commands:
                     "date": row[0],
                     "total_revenue_buys": row[1],
                     "total_revenue_subscriptions": row[2],
-                    "total_combined_revenue": row[3],
-                    "last_updated": row[4]
+                    "premium_subscription_revenue": row[3],
+                    "basic_subscription_revenue": row[4],
+                    "total_combined_revenue": row[5],
+                    "last_updated": row[6]
                 })
             
             conn.close()
