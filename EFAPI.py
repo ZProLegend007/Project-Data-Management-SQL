@@ -713,25 +713,55 @@ class EFAPI_Commands:
             conn = self._get_connection()
             cursor = conn.cursor()
             
-            cursor.execute("""
-                SELECT Date, Total_Shows_Bought, Total_Subscriptions, Premium_Subscriptions, 
-                       Basic_Subscriptions, Total_Users, Last_Updated
-                FROM STATISTICS
-                ORDER BY Date DESC
-                LIMIT 1
-            """)
+            # Check if new columns exist
+            cursor.execute("PRAGMA table_info(STATISTICS)")
+            stats_columns = [row[1] for row in cursor.fetchall()]
             
+            cursor.execute("PRAGMA table_info(FINANCIALS)")
+            finance_columns = [row[1] for row in cursor.fetchall()]
+            
+            # Build queries based on available columns
+            if 'Premium_Subscriptions' in stats_columns and 'Basic_Subscriptions' in stats_columns:
+                stats_query = """
+                    SELECT Date, Total_Shows_Bought, Total_Subscriptions, Premium_Subscriptions, 
+                           Basic_Subscriptions, Total_Users, Last_Updated
+                    FROM STATISTICS
+                    ORDER BY Date DESC
+                    LIMIT 1
+                """
+            else:
+                stats_query = """
+                    SELECT Date, Total_Shows_Bought, Total_Subscriptions, 
+                           0 as Premium_Subscriptions, 0 as Basic_Subscriptions,
+                           Total_Users, Last_Updated
+                    FROM STATISTICS
+                    ORDER BY Date DESC
+                    LIMIT 1
+                """
+            
+            cursor.execute(stats_query)
             stats_row = cursor.fetchone()
             
-            cursor.execute("""
-                SELECT Date, Total_Revenue_Buys, Total_Revenue_Subscriptions, 
-                       Premium_Subscription_Revenue, Basic_Subscription_Revenue,
-                       Total_Combined_Revenue, Last_Updated
-                FROM FINANCIALS
-                ORDER BY Date DESC
-                LIMIT 1
-            """)
+            if 'Premium_Subscription_Revenue' in finance_columns and 'Basic_Subscription_Revenue' in finance_columns:
+                finance_query = """
+                    SELECT Date, Total_Revenue_Buys, Total_Revenue_Subscriptions, 
+                           Premium_Subscription_Revenue, Basic_Subscription_Revenue,
+                           Total_Combined_Revenue, Last_Updated
+                    FROM FINANCIALS
+                    ORDER BY Date DESC
+                    LIMIT 1
+                """
+            else:
+                finance_query = """
+                    SELECT Date, Total_Revenue_Buys, Total_Revenue_Subscriptions, 
+                           0.00 as Premium_Subscription_Revenue, 0.00 as Basic_Subscription_Revenue,
+                           Total_Combined_Revenue, Last_Updated
+                    FROM FINANCIALS
+                    ORDER BY Date DESC
+                    LIMIT 1
+                """
             
+            cursor.execute(finance_query)
             finance_row = cursor.fetchone()
             conn.close()
             
@@ -767,13 +797,28 @@ class EFAPI_Commands:
             conn = self._get_connection()
             cursor = conn.cursor()
             
-            cursor.execute("""
-                SELECT Date, Total_Revenue_Buys, Total_Revenue_Subscriptions, 
-                       Premium_Subscription_Revenue, Basic_Subscription_Revenue,
-                       Total_Combined_Revenue, Last_Updated
-                FROM FINANCIALS
-                ORDER BY Date DESC
-            """)
+            # Check if new columns exist
+            cursor.execute("PRAGMA table_info(FINANCIALS)")
+            finance_columns = [row[1] for row in cursor.fetchall()]
+            
+            if 'Premium_Subscription_Revenue' in finance_columns and 'Basic_Subscription_Revenue' in finance_columns:
+                finance_query = """
+                    SELECT Date, Total_Revenue_Buys, Total_Revenue_Subscriptions, 
+                           Premium_Subscription_Revenue, Basic_Subscription_Revenue,
+                           Total_Combined_Revenue, Last_Updated
+                    FROM FINANCIALS
+                    ORDER BY Date DESC
+                """
+            else:
+                finance_query = """
+                    SELECT Date, Total_Revenue_Buys, Total_Revenue_Subscriptions, 
+                           0.00 as Premium_Subscription_Revenue, 0.00 as Basic_Subscription_Revenue,
+                           Total_Combined_Revenue, Last_Updated
+                    FROM FINANCIALS
+                    ORDER BY Date DESC
+                """
+            
+            cursor.execute(finance_query)
             
             finances = []
             for row in cursor.fetchall():
@@ -1032,7 +1077,8 @@ def main():
     parser.add_argument('--cost_to_buy', type=float, help='Show purchase cost')
     parser.add_argument('--buy_id', type=int, help='Buy ID')
     parser.add_argument('--favourite_genre', help='User favourite genre')
-    parser.add_argument('--marketing_opt_in', type=bool, default=False, help='Marketing opt-in flag')
+    parser.add_argument('--marketing_opt_in_true', action='store_true', help='Set marketing opt-in to true')
+    parser.add_argument('--marketing_opt_in_false', action='store_true', help='Set marketing opt-in to false')
     parser.add_argument('--year', type=int, help='Release year for search')
         
     args = parser.parse_args()
@@ -1084,8 +1130,10 @@ def main():
             kwargs['buy_id'] = args.buy_id
         if args.favourite_genre:
             kwargs['favourite_genre'] = args.favourite_genre
-        if hasattr(args, 'marketing_opt_in'):
-            kwargs['marketing_opt_in'] = args.marketing_opt_in
+        if args.marketing_opt_in_true:
+            kwargs['marketing_opt_in'] = True
+        elif args.marketing_opt_in_false:
+            kwargs['marketing_opt_in'] = False
         if args.year:
             kwargs['year'] = args.year
         
