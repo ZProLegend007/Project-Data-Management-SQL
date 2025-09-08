@@ -24,9 +24,15 @@ Parts of this will be updated and done relevant to the final project in part 2, 
 | | System testing | 1 day | |
 | | Final documentation | 1 day | |
 
+Phase 1 - Research and design appropriate solution to the problem. Ensure proper planning and infrastructure to build on is created.
+Phase 2 - Begin developement, noting down changes and relevant information during the process. Create programs and database.
+Phase 3 - Test system and create final documentation on project and how well it solved the issue.
+
 ### Problem Outline
 
 EasyFlix is an online media service, they need a software solution for customers so they can create an account, purchase a subscription, rent shows, e.t.c. They also need a solution to track financial information and record sales. This should be done using a software solution that interacts with an SQL database, reading, storing and removing values.
+
+Note: During developement some ideas and names have changed, such as rent --> buy
 
 ### Problem Description
 
@@ -38,7 +44,7 @@ They also need an admin software solution for managing the users, tracking sales
 
 This all needs to be done with an SQL database to store the values, ensuring optimal and consistent security, integrity and availability of the data.
 
-#### Solutions:
+#### Planned Solutions:
 
 EasyFlixUser is a python-based application designed for users, giving them the ability to do the following;
 - Login or Create an account
@@ -48,7 +54,7 @@ EasyFlixUser is a python-based application designed for users, giving them the a
 - Add shows to account
 - Rent or return premium shows (if on basic plan)
 
-EasyManagement is another Python-based application designed for an administrator of EasyFlix to access all aspects of it's media service including;
+EasyFlixAdmin is another Python-based application designed for an administrator of EasyFlix to access all aspects of it's media service including;
 - User account management (Account creation, password changes, account termination)
 - Subscription management (Price changes)
 - Media content managment (add movies/tv shows, modify show access group, modify rent price)
@@ -61,6 +67,17 @@ EasyManagement is another Python-based application designed for an administrator
 
 **Programming Requirements:**
 - Python 3.x application with SQLite3 database integration
+- Clean, professional UI (will use Textual GUI)
+- Modular code structure for better maintainability
+
+**Database Requirements:**
+- ~Dual database architecture (Separated sensitive data from non-sensitive)~
+- Complete data integrity, ensuring data is accurate, complete and consistent
+- Database backup ability, ensuring data safety
+- Easily available non-sensitive data, authentication required for sensitive data
+- Data security all passwords will be stored as a hash using SHA-256 with salt
+
+**Functional Requirements**
 - Users able to manage accounts
      - Create account
      - Delete account
@@ -72,46 +89,54 @@ EasyManagement is another Python-based application designed for an administrator
      - Change show access group
      - Change show rent cost
 - Admins able to see rentals, financial statistics, users, overall information
-- Clean, professional GUI using Textual
-- Modular code structure for better maintainability
-
-**Database Requirements:**
-- Dual database architecture (Separated sensitive data from non-sensitive)
-- Complete data integrity, ensuring data is accurate, complete and consistent
-- Database backup ability, ensuring data safety
-- Easily available non-sensitive data, authentication required for sensitive data
-- Data security all passwords will be stored as a hash using SHA-256 with salt
-
+- Information readily available to authorised parties
+- Information readily editable to authorised parties
 
 #### Ethical, Legal and Security Issues
+Requirements and things to keep in mind regarding ethics, laws and security
 
 **Security Issues:**
 - Password storage must use SHA-256 hashing with unique salts
-- Separation of sensitive customer data from content data
+     - Hashes must be used to protect the passwords in the database in the rare case of a data breach
+     - This ensures passwords aren't just released to the internet in a worst case scenario
+     - Salts are used to make the cracking process much harder
 - Input validation to prevent SQL injection attacks
+     - Use proper sanitisation to prevent sql injection and data breaches
+     - The API middleman also helps this and dramatically increases security by adding another step
 - Administrative access control and session management
+     - Proper login details for admins, will also have a stored hash
 - All access to sensitive data requires admin authentication
+- Secure communication between programs and API
+     - The programs may still be sending sensitive data on it's way to the database. Encrypting the communication between the programs and API will put a shield around that information and an especially strong encryption will be a very protective guard against malicious attacks
 
 **Legal Issues:**
-- Compliance with data protection regulations for customer data
+- Compliance with data protection regulations for customer data & No storage of advertising data for opted out users
+     - Any merketing data should only be collected with consent
+     - If consent is withdrawn the information should be removed
 - Secure storage of personal information (names, emails)
-- Proper handling of financial transaction data -- hypothetical, will not be integrated
+     - Ties in with security, look after sensitive data properly
 - Administrative responsibility for user data management
-- No storage of advertising data for opted out users
+     - Use of admin controls should be strictly professional and it would even be a good idea to implement guidelines
 
 **Ethical Issues:**
 - Responsible handling of customer personal information
+     - Ties in with above and security, proper storage and protection for sensitive data
 - Transparent subscription and rental cost management
+     - All costs are easily readable and presented for easy understanding
 - Fair content access based on subscription levels
+     - Reasonable show choices and 'moneys-worth' for subscription levels
 - Ethical data collection and usage practices
+     - User is opted out by default, respect to the user
 - Opt in for data sharing
+     - As above
 
 #### Data Quality Factors
 
 **Data Accuracy:**
-- Email validation to ensure correct format
-- Date validation for release dates and rental periods
-- Numerical validation for financial amounts and user IDs
+- Input validation to ensure data meets specific criteria
+- Format checking (e.g., email addresses, phone numbers)
+- Range validation for numerical data
+- Required field validation
 
 **Data Consistency:**
 - Referential integrity between customers and rentals
@@ -123,10 +148,43 @@ EasyManagement is another Python-based application designed for an administrator
 - Encrypted password storage for all users
 - Database file protection and access control
 - Administrative audit trails and logging
+- User authentication and authorization
+
+**Data Types and Constraints**
+- Proper data type selection (INTEGER, VARCHAR, DATE, etc.)
+- Primary key constraints to ensure uniqueness
+- Foreign key constraints to maintain referential integrity
+- Check constraints to enforce business rules
+
+**Data Entry Controls**
+- User interface design that prevents incorrect data entry
+- Drop-down menus and selection lists to limit input options
+- Data entry training for users
+
+**Database Design**
+- Normalization to reduce data redundancy
+- Proper table relationships
+- Well-defined entity relationships
+- Appropriate indexing strategies
+
+**Backup and Recovery**
+- Regular automated backups
+     - Would be helpful to implement, will add to future features
+- Recovery procedures and testing
+- Transaction logs
+- Disaster recovery planning
+
+**Human Factors**
+- User training and education
+- Clear data entry procedures
+- Error reporting mechanisms
+- Quality assurance processes
 
 ---
 
 ## DESIGN
+
+### OLD DESIGN (THIS WAS REVAMPED IN DEVELOPEMENT)
 
 ### Entity Relation Diagram
 
@@ -332,4 +390,217 @@ Tracks revenue and financial data across all income streams. Critical for busine
 22. **Find peak rental days**
    - Query the STATISTICS table to identify dates with the highest Total_Shows_Rented
    - Helps identify popular viewing periods and plan capacity
+
+### NEW DESIGN
+
+### Entity Relation Diagram
+
+<img width="1304" height="2457" alt="image" src="https://github.com/user-attachments/assets/efb0f986-ac64-4b12-af5b-3544686433b9" />
+
+## Relational Notation
+
+**ADMIN_CREDENTIALS**(Admin_ID, Username, Password_Hash, Salt, Role, Created_Date)
+- Primary Key: Admin_ID
+
+**CUSTOMERS**(User_ID, Username, Email, Password_Hash, Salt, Subscription_Level, Shows, Total_Spent, Favourite_Genre, Marketing_Opt_In)
+- Primary Key: User_ID
+
+**SHOWS**(Show_ID, Name, Release_Date, Rating, Director, Length, Genre, Access_Group, Cost_To_Buy)
+- Primary Key: Show_ID
+
+**BUYS**(Buy_ID, User_ID, Show_ID, Buy_Date, Cost)
+- Primary Key: Buy_ID
+- Foreign Keys: User_ID references CUSTOMERS(User_ID), Show_ID references SHOWS(Show_ID)
+
+**STATISTICS**(Date, Total_Shows_Bought, Total_Subscriptions, Premium_Subscriptions, Basic_Subscriptions, Total_Users, Last_Updated)
+- Primary Key: Date
+
+**FINANCIALS**(Date, Total_Revenue_Buys, Total_Revenue_Subscriptions, Premium_Subscription_Revenue, Basic_Subscription_Revenue, Total_Combined_Revenue, Last_Updated)
+- Primary Key: Date
+
+## Data Dictionary
+
+### ADMIN_CREDENTIALS
+Stores administrator account information with secure authentication credentials for admin portal access.
+
+### CUSTOMERS
+Contains user account information including authentication details, subscription level, and user preferences. The Shows field stores comma-separated show IDs representing the user's collection.
+
+### SHOWS
+Complete media catalog with show details, ratings, and access control information. Access_Group determines subscription level required, Cost_To_Buy applies when basic users purchase premium content.
+
+### BUYS
+Records purchase transactions when basic subscribers buy premium shows. Creates transactional history linking customers to purchased shows.
+
+### STATISTICS
+Daily system statistics for administrative reporting and business intelligence. Automatically updated with current system metrics.
+
+### FINANCIALS
+Daily financial data tracking revenue from subscriptions and purchases. Separates revenue streams for detailed business analysis.
+
+## Detailed Field Descriptions
+
+### ADMIN_CREDENTIALS Table
+| Field Name | Data Type | Length | Constraints | Description |
+|------------|-----------|---------|-------------|-------------|
+| Admin_ID | INTEGER | - | PRIMARY KEY, AUTOINCREMENT | Unique administrator identifier |
+| Username | VARCHAR | 50 | UNIQUE, NOT NULL | Admin login username |
+| Password_Hash | VARCHAR | 64 | NOT NULL | SHA-256 hashed password |
+| Salt | VARCHAR | 32 | NOT NULL | Unique salt for password hashing |
+| Role | VARCHAR | 20 | DEFAULT 'admin' | Administrator role designation |
+| Created_Date | DATETIME | - | DEFAULT CURRENT_TIMESTAMP | Account creation timestamp |
+
+### CUSTOMERS Table
+| Field Name | Data Type | Length | Constraints | Description |
+|------------|-----------|---------|-------------|-------------|
+| User_ID | INTEGER | - | PRIMARY KEY, AUTOINCREMENT | Unique customer identifier |
+| Username | VARCHAR | 50 | UNIQUE, NOT NULL | User's chosen username |
+| Email | VARCHAR | 100 | UNIQUE, NOT NULL | User's email address |
+| Password_Hash | VARCHAR | 64 | NOT NULL | SHA-256 hashed password |
+| Salt | VARCHAR | 32 | NOT NULL | Unique salt for password hashing |
+| Subscription_Level | VARCHAR | 20 | NOT NULL, CHECK IN ('Basic', 'Premium') | Current subscription tier |
+| Shows | TEXT | - | - | Comma-separated list of show IDs in collection |
+| Total_Spent | DECIMAL | 10,2 | DEFAULT 0.00 | Total amount spent including subscriptions |
+| Favourite_Genre | VARCHAR | 30 | - | Auto-calculated preferred genre from viewing history |
+| Marketing_Opt_In | BOOLEAN | - | DEFAULT 0 | Marketing communication preference |
+
+### SHOWS Table
+| Field Name | Data Type | Length | Constraints | Description |
+|------------|-----------|---------|-------------|-------------|
+| Show_ID | INTEGER | - | PRIMARY KEY, AUTOINCREMENT | Unique show identifier |
+| Name | VARCHAR | 100 | NOT NULL | Title of the show or movie |
+| Release_Date | DATE | - | NOT NULL | Original release date |
+| Rating | VARCHAR | 10 | NOT NULL | Content rating (G, PG, PG-13, R, TV-14, TV-MA, TV-PG) |
+| Director | VARCHAR | 100 | NOT NULL | Director's name |
+| Length | INTEGER | - | NOT NULL | Duration in minutes |
+| Genre | VARCHAR | 30 | NOT NULL | Primary genre classification |
+| Access_Group | VARCHAR | 20 | NOT NULL, CHECK IN ('Basic', 'Premium') | Required subscription level |
+| Cost_To_Buy | DECIMAL | 5,2 | NULL | Purchase price for basic users (NULL for Basic tier shows) |
+
+### BUYS Table
+| Field Name | Data Type | Length | Constraints | Description |
+|------------|-----------|---------|-------------|-------------|
+| Buy_ID | INTEGER | - | PRIMARY KEY, AUTOINCREMENT | Unique purchase transaction identifier |
+| User_ID | INTEGER | - | FOREIGN KEY, NOT NULL | References CUSTOMERS(User_ID) |
+| Show_ID | INTEGER | - | FOREIGN KEY, NOT NULL | References SHOWS(Show_ID) |
+| Buy_Date | DATE | - | NOT NULL | Date of purchase transaction |
+| Cost | DECIMAL | 5,2 | NOT NULL | Amount charged for this purchase |
+
+### STATISTICS Table
+| Field Name | Data Type | Length | Constraints | Description |
+|------------|-----------|---------|-------------|-------------|
+| Date | DATE | - | PRIMARY KEY, NOT NULL | Date for statistics record |
+| Total_Shows_Bought | INTEGER | - | DEFAULT 0 | Count of all purchase transactions |
+| Total_Subscriptions | INTEGER | - | DEFAULT 0 | Total active subscriptions |
+| Premium_Subscriptions | INTEGER | - | DEFAULT 0 | Count of premium subscribers |
+| Basic_Subscriptions | INTEGER | - | DEFAULT 0 | Count of basic subscribers |
+| Total_Users | INTEGER | - | DEFAULT 0 | Total registered users |
+| Last_Updated | DATETIME | - | NOT NULL | Last statistics update timestamp |
+
+### FINANCIALS Table
+| Field Name | Data Type | Length | Constraints | Description |
+|------------|-----------|---------|-------------|-------------|
+| Date | DATE | - | PRIMARY KEY, NOT NULL | Date for financial record |
+| Total_Revenue_Buys | DECIMAL | 10,2 | DEFAULT 0.00 | Revenue from show purchases |
+| Total_Revenue_Subscriptions | DECIMAL | 10,2 | DEFAULT 0.00 | Revenue from all subscriptions |
+| Premium_Subscription_Revenue | DECIMAL | 10,2 | DEFAULT 0.00 | Revenue from premium subscriptions ($80 each) |
+| Basic_Subscription_Revenue | DECIMAL | 10,2 | DEFAULT 0.00 | Revenue from basic subscriptions ($30 each) |
+| Total_Combined_Revenue | DECIMAL | 10,2 | DEFAULT 0.00 | Sum of all revenue streams |
+| Last_Updated | DATETIME | - | NOT NULL | Last financial update timestamp |
+
+## Database Queries
+
+### User Management Queries
+
+1. **Find all premium subscribers**
+   - Query the CUSTOMERS table to retrieve users with Premium subscription level
+   - Returns user details for premium customer analysis
+
+2. **Get high-value customers**
+   - Query CUSTOMERS table filtering by Total_Spent above threshold
+   - Orders by spending amount for VIP customer identification
+
+3. **List customers by favorite genre**
+   - Query CUSTOMERS table for users with Marketing_Opt_In enabled
+   - Groups by Favourite_Genre for targeted marketing campaigns
+
+### Content Management Queries
+
+4. **Get shows available to basic users**
+   - Query SHOWS table filtering by Access_Group equals 'Basic'
+   - Returns content accessible without additional purchase
+
+5. **Find premium shows with pricing**
+   - Query SHOWS table for Premium access group with Cost_To_Buy values
+   - Lists purchasable content for basic subscribers
+
+6. **Search shows by multiple criteria**
+   - Query SHOWS table with filters for genre, rating, release year, or name
+   - Supports advanced content discovery and filtering
+
+### Purchase Analysis Queries
+
+7. **Get user's purchased content**
+   - Join BUYS with SHOWS tables filtered by User_ID
+   - Returns complete purchase history with show details
+
+8. **Calculate daily purchase revenue**
+   - Sum Cost field from BUYS table for specific date
+   - Provides daily purchase revenue totals
+
+9. **Find most popular purchased shows**
+   - Join BUYS with SHOWS, group by Show_ID, count purchases
+   - Identifies trending premium content
+
+### Complex Relationship Queries
+
+10. **Get complete user profile with purchases**
+    - Join CUSTOMERS with BUYS and SHOWS tables
+    - Returns comprehensive user activity and spending patterns
+
+11. **Find users without purchases**
+    - Left join CUSTOMERS with BUYS to find users with no purchase history
+    - Identifies potential customers for marketing campaigns
+
+12. **Calculate subscription conversion rates**
+    - Compare basic vs premium subscription counts with purchase activity
+    - Analyzes subscription tier effectiveness
+
+### Administrative Reporting Queries
+
+13. **Generate current system statistics**
+    - Query latest STATISTICS record by Date
+    - Provides real-time system metrics dashboard
+
+14. **Create revenue trend analysis**
+    - Query FINANCIALS table over date range
+    - Shows revenue growth and seasonal patterns
+
+15. **Find inactive user accounts**
+    - Query CUSTOMERS for users with empty Shows field
+    - Identifies dormant accounts needing engagement
+
+### Financial Analysis Queries
+
+16. **Validate subscription revenue calculations**
+    - Cross-reference CUSTOMERS subscription counts with FINANCIALS revenue
+    - Ensures financial data accuracy
+
+17. **Track daily revenue breakdown**
+    - Query FINANCIALS for subscription vs purchase revenue comparison
+    - Shows revenue stream distribution
+
+18. **Calculate average customer value**
+    - Average Total_Spent from CUSTOMERS grouped by subscription level
+    - Determines customer lifetime value by tier
+
+### Security and Data Integrity Queries
+
+19. **Verify user show collections**
+    - Cross-reference CUSTOMERS Shows field with actual BUYS records
+    - Ensures data consistency between purchase history and collections
+
+20. **Audit admin access logs**
+    - Query ADMIN_CREDENTIALS for recent access patterns
+    - Monitors administrative activity for security
 
