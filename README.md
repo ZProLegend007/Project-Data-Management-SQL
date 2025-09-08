@@ -5,7 +5,9 @@
 3. Run the programs, I recommend starting with EasyFlixUser and making 1 or 2 accounts to test some stuff, then use EasyFlixAdmin
 
 **Admin login credentials:**
+
 Username: EF@dm1n
+
 Password: EFP@55
 
 #### Click links below for research and evaluation
