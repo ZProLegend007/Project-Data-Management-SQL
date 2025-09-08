@@ -929,7 +929,6 @@ class EasyFlixAdminApp(App):
     .sidebar_button:hover {
         background: #e94560;
         color: #ffffff;
-        border: solid #f39c12;
     }
     
     .menu_title {
@@ -1077,16 +1076,27 @@ class EasyFlixAdminApp(App):
         background: #3498db;
         margin-top: 1;
         width: 25;
+        height: 3;
+    }
+    
+    .manage_button:hover {
+        background: #5DADE2;
     }
     
     .edit_button {
         background: #f39c12;
         margin-top: 1;
         width: 100%;
+        height: 3;
+    }
+    
+    .edit_button:hover {
+        background: #F7DC6F;
     }
     
     .action_button {
         margin: 1;
+        height: 3;
     }
     
     .cost_container {
@@ -1237,12 +1247,11 @@ class EasyFlixAdminApp(App):
     
     Button {
         margin: 1;
+        height: 3;
     }
     
     Button:hover {
         text-style: bold;
-        border: solid #e94560;
-        background: #34495e;
     }
     
     Button.-primary {
@@ -1252,7 +1261,6 @@ class EasyFlixAdminApp(App):
     
     Button.-primary:hover {
         background: #c0392b;
-        border: solid #f39c12;
     }
     
     Button.-success {
@@ -1262,7 +1270,6 @@ class EasyFlixAdminApp(App):
     
     Button.-success:hover {
         background: #2ecc71;
-        border: solid #27ae60;
     }
     
     Button.-warning {
@@ -1272,7 +1279,6 @@ class EasyFlixAdminApp(App):
     
     Button.-warning:hover {
         background: #e67e22;
-        border: solid #d35400;
     }
     
     Button.-error {
@@ -1282,7 +1288,6 @@ class EasyFlixAdminApp(App):
     
     Button.-error:hover {
         background: #c0392b;
-        border: solid #e74c3c;
     }
     
     Button.-default {
@@ -1292,7 +1297,6 @@ class EasyFlixAdminApp(App):
     
     Button.-default:hover {
         background: #7f8c8d;
-        border: solid #bdc3c7;
     }
     """
     
