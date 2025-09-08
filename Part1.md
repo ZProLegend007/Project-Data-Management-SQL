@@ -10,17 +10,17 @@ Parts of this will be updated and done relevant to the final project in part 2, 
 
 | **Phase** | **Task** | **Duration** | **Completion %** |
 |-----------|----------|--------------|------------------|
-| **Phase 1** | Research & Design | 3 days | 100% |
+| **Phase 1** | **Research & Design** | 3 days | 100% |
 | | Problem analysis | 1 day | |
 | | Database design & ERD | 1 day | |
 | | Interface mockups | 1 day | |
-| **Phase 2** | Development | 5 days | 100% |
+| **Phase 2** | **Development** | 5 days | 100% |
 | | Database implementation | 1 day | |
 | | Core functions | 1 day | |
 | | User interface | 1 day | |
 | | Admin interface | 1 day | |
 | | Extra buffer time for unexpected delays | 1 day | |
-| **Phase 3** | Testing & Documentation | 2 days | 100% |
+| **Phase 3** | **Testing & Documentation** | 2 days | 100% |
 | | System testing | 1 day | |
 | | Final documentation | 1 day | |
 
