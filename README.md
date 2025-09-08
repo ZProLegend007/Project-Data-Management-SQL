@@ -6,7 +6,6 @@ This lists changes to the program since the research stage due to unforseen issu
 
 ### Found issues and solutions:
 - **Users should not have access to any data except shows**
-
   - Usually this would be handled by an API middleman as this would all be server hosted. However instead, the user program will call an 'API' program that will perform checks and authentication such as comparing hashes.
     - This turned out to be a major undertaking but worth it
       - The API will communicate through json with the programs
@@ -22,6 +21,9 @@ This lists changes to the program since the research stage due to unforseen issu
  
 - Renting is no longer a thing, users just buy shows they can't access. Also this is "subscription based" but for the purposes of this assignment, the auto-renewal will not be implemented.
 - It is also helpful to know that the statistics and finances that are logged are logged day by day, they will be updated unless it is a new day and then they will start a new column, the data should add on, not log only for that day
+
+- **THE DATABASE LAYOUT HAS CHANGED IN ORDER TO HAVE A MORE OPTIMISED DATABASE WITH BETTER DATA INTEGRITY**
+  - 
   
 - **Subscription level should update immediately on account page after being changed**
   - Fixed
@@ -33,6 +35,9 @@ This lists changes to the program since the research stage due to unforseen issu
 - **Communication with API may not be secure**
   - Add **fully** encrypted communication between programs and API
     - Should be relatively simple, just modify the main connection method
+
+- **When a user opts out of marketing, their data is still in the database**
+  - Ensure marketing data is cleared on opt out
  
 #### Notes
 
