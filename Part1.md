@@ -2,8 +2,6 @@
 
 ---
 
-Parts of this will be updated and done relevant to the final project in part 2, so if it is not up to par for full marks in a section check over there for anything that may be missing.
-
 ## INVESTIGATE
 
 ### Timeline and Schedule
