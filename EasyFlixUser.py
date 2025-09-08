@@ -314,8 +314,8 @@ class MainScreen(Screen):
                     self.search_timer.stop()
                 except:
                     pass
-            # Set new timer for 2 seconds
-            self.search_timer = self.set_timer(2.0, self.apply_filters)
+            # Set new timer for 0.5 seconds
+            self.search_timer = self.set_timer(0.5, self.apply_filters)
 
     def on_select_changed(self, event: Select.Changed) -> None:
         if event.select.id in ["genre_filter", "rating_filter"]:
@@ -626,15 +626,10 @@ class MainScreen(Screen):
             button_variant = "warning"
             button_classes = "premium_button"
             button_disabled = False
-        elif user_subscription == "Premium":
-            button_text = "Add to My Shows (Free)"
-            button_variant = "success"
-            button_classes = "premium_included"
-            button_disabled = False
         else:
             button_text = "Add to My Shows"
-            button_variant = "primary"
-            button_classes = "basic_button"
+            button_variant = "primary" if not is_premium else "success"
+            button_classes = "basic_button" if not is_premium else "premium_included"
             button_disabled = False
         
         button = Button(
@@ -971,7 +966,7 @@ class EasyFlixUserApp(App):
     }
     
     .sidebar_button {
-        width: 90%;
+        width: 100%;
         margin: 1;
         height: 3;
         text-align: center;
