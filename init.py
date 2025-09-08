@@ -64,10 +64,30 @@ class DatabaseInitialiser:
         conn.execute(f"PRAGMA user = '{self.authorized_user}'")
         return conn
     
+    def _hash_password(self, password: str, salt: str) -> str:
+        """Hash password with salt"""
+        return hashlib.sha256((password + salt).encode()).hexdigest()
+    
+    def _generate_salt(self) -> str:
+        """Generate random salt"""
+        return secrets.token_hex(16)
+    
     def create_tables(self):
         """Create all database tables"""
         conn = self._create_connection()
         cursor = conn.cursor()
+        
+        # ADMIN_CREDENTIALS table
+        cursor.execute('''
+        CREATE TABLE IF NOT EXISTS ADMIN_CREDENTIALS (
+            Admin_ID INTEGER PRIMARY KEY AUTOINCREMENT,
+            Username VARCHAR(50) UNIQUE NOT NULL,
+            Password_Hash VARCHAR(64) NOT NULL,
+            Salt VARCHAR(32) NOT NULL,
+            Role VARCHAR(20) DEFAULT 'admin',
+            Created_Date DATETIME DEFAULT CURRENT_TIMESTAMP
+        )
+        ''')
         
         # CUSTOMERS table with Marketing_Opt_In column
         cursor.execute('''
@@ -138,6 +158,31 @@ class DatabaseInitialiser:
             Last_Updated DATETIME NOT NULL
         )
         ''')
+        
+        conn.commit()
+        conn.close()
+    
+    def create_admin_credentials(self):
+        """Create default admin credentials"""
+        conn = self._create_connection()
+        cursor = conn.cursor()
+        
+        # Check if admin already exists
+        cursor.execute("SELECT Admin_ID FROM ADMIN_CREDENTIALS WHERE Username = ?", ("EF@dm1n",))
+        if cursor.fetchone():
+            conn.close()
+            return  # Admin already exists
+        
+        # Create default admin
+        admin_username = "EF@dm1n"
+        admin_password = "EFP@55"
+        salt = self._generate_salt()
+        password_hash = self._hash_password(admin_password, salt)
+        
+        cursor.execute('''
+        INSERT INTO ADMIN_CREDENTIALS (Username, Password_Hash, Salt, Role)
+        VALUES (?, ?, ?, ?)
+        ''', (admin_username, password_hash, salt, "admin"))
         
         conn.commit()
         conn.close()
@@ -342,17 +387,22 @@ class DatabaseInitApp(App):
             await asyncio.sleep(1)
             db_init.create_tables()
             
-            # Step 2: Populate shows
-            await self.update_progress(50, "Populating shows catalog...")
+            # Step 2: Create admin credentials
+            await self.update_progress(30, "Setting up admin credentials...")
+            await asyncio.sleep(1)
+            db_init.create_admin_credentials()
+            
+            # Step 3: Populate shows
+            await self.update_progress(60, "Populating shows catalog...")
             await asyncio.sleep(2)
             db_init.populate_shows()
             
-            # Step 3: Initialise stats and financials
-            await self.update_progress(80, "Setting up statistics and financials...")
+            # Step 4: Initialise stats and financials
+            await self.update_progress(90, "Setting up statistics and financials...")
             await asyncio.sleep(1)
             db_init.initialise_stats_and_financials()
             
-            # Step 4: Complete
+            # Step 5: Complete
             await self.update_progress(100, "Database initialisation complete!")
             await asyncio.sleep(1)
             
