@@ -60,43 +60,160 @@ class DeleteConfirmModal(ModalScreen):
         else:
             self.dismiss(None)
 
+class DeleteShowConfirmModal(ModalScreen):
+    """Modal for confirming show deletion"""
+    
+    def __init__(self, show_name: str, show_id: int):
+        super().__init__()
+        self.show_name = show_name
+        self.show_id = show_id
+    
+    def compose(self) -> ComposeResult:
+        yield Container(
+            Static(f"Delete Show", classes="modal_title"),
+            Static(f"Show: {self.show_name}", classes="modal_text"),
+            Static("Are you sure you want to permanently delete this show?", classes="modal_text"),
+            Static("This action cannot be undone!", classes="modal_warning"),
+            Horizontal(
+                Button("Delete", id="confirm_delete_show", variant="error"),
+                Button("Cancel", id="cancel_delete_show", variant="default"),
+                classes="modal_buttons"
+            ),
+            classes="modal_container_fullscreen"
+        )
+    
+    def on_button_pressed(self, event: Button.Pressed) -> None:
+        if event.button.id == "confirm_delete_show":
+            self.dismiss({"action": "delete", "show_id": self.show_id})
+        else:
+            self.dismiss(None)
+
+class UserManagementModal(ModalScreen):
+    """Modal for managing user account"""
+    
+    def __init__(self, user: Dict):
+        super().__init__()
+        self.user = user
+    
+    def compose(self) -> ComposeResult:
+        yield Container(
+            Static(f"Manage User: {self.user.get('username', 'Unknown')}", classes="modal_title"),
+            Horizontal(
+                Container(
+                    Label("Current Information:"),
+                    Static(f"Email: {self.user.get('email', 'N/A')}", classes="user_info_text"),
+                    Static(f"Subscription: {self.user.get('subscription_level', 'N/A')}", classes="user_info_text"),
+                    Static(f"Total Spent: ${self.user.get('total_spent', 0):.2f}", classes="user_info_text"),
+                    Static(f"Favorite Genre: {self.user.get('favourite_genre', 'Not set')}", classes="user_info_text"),
+                    Static(f"Marketing Opt-in: {'Yes' if self.user.get('marketing_opt_in', False) else 'No'}", classes="user_info_text"),
+                    classes="user_info_column"
+                ),
+                Container(
+                    Label("Management Actions:"),
+                    Label("New Password:"),
+                    Input(placeholder="Enter new password", password=True, id="new_password"),
+                    Label("New Subscription Level:"),
+                    Select([("Basic", "Basic"), ("Premium", "Premium")], 
+                          value=self.user.get("subscription_level", "Basic"), id="subscription_select"),
+                    classes="user_management_column"
+                ),
+                classes="user_management_layout"
+            ),
+            Horizontal(
+                Button("Update User", id="update_user", variant="primary"),
+                Button("Delete User", id="delete_user", variant="error"),
+                Button("Cancel", id="cancel_manage", variant="default"),
+                classes="modal_buttons"
+            ),
+            classes="modal_container_fullscreen"
+        )
+    
+    def on_button_pressed(self, event: Button.Pressed) -> None:
+        if event.button.id == "update_user":
+            new_password = self.query_one("#new_password", Input).value
+            subscription = self.query_one("#subscription_select", Select).value
+            
+            self.dismiss({
+                "action": "update",
+                "user_id": self.user.get("user_id"),
+                "new_password": new_password if new_password else None,
+                "subscription_level": subscription
+            })
+        elif event.button.id == "delete_user":
+            self.dismiss({
+                "action": "delete",
+                "user_id": self.user.get("user_id")
+            })
+        else:
+            self.dismiss(None)
+
 class AddShowModal(ModalScreen):
     """Modal for adding a new show"""
     
     def compose(self) -> ComposeResult:
         yield Container(
             Static("Add New Show", classes="modal_title"),
-            Container(
-                Label("Name:"),
-                Input(placeholder="Enter show name", id="show_name"),
-                Label("Release Date (YYYY-MM-DD):"),
-                Input(placeholder="2024-01-01", id="release_date"),
-                Label("Rating:"),
-                Select([("G", "G"), ("PG", "PG"), ("PG-13", "PG-13"), ("R", "R"), ("TV-14", "TV-14"), ("TV-MA", "TV-MA"), ("TV-PG", "TV-PG")], id="rating_select"),
-                Label("Director:"),
-                Input(placeholder="Enter director name", id="director"),
-                Label("Length (minutes):"),
-                Input(placeholder="120", id="length"),
-                Label("Genre:"),
-                Select([
-                    ("Action", "Action"), ("Adventure", "Adventure"), ("Animation", "Animation"),
-                    ("Comedy", "Comedy"), ("Crime", "Crime"), ("Drama", "Drama"),
-                    ("Fantasy", "Fantasy"), ("History", "History"), ("Romance", "Romance"),
-                    ("Sci-Fi", "Sci-Fi"), ("Thriller", "Thriller")
-                ], id="genre_select"),
-                Label("Access Group:"),
-                Select([("Basic", "Basic"), ("Premium", "Premium")], id="access_group_select"),
-                Label("Cost to Buy (for Premium, leave blank for Basic):"),
-                Input(placeholder="9.99", id="cost_to_buy"),
-                Horizontal(
-                    Button("Add Show", id="add_show", variant="primary"),
-                    Button("Cancel", id="cancel_add", variant="default"),
-                    classes="modal_buttons"
+            Horizontal(
+                Container(
+                    Label("Name:"),
+                    Input(placeholder="Enter show name", id="show_name"),
+                    Label("Director:"),
+                    Input(placeholder="Enter director name", id="director"),
+                    Label("Genre:"),
+                    Select([
+                        ("Action", "Action"), ("Adventure", "Adventure"), ("Animation", "Animation"),
+                        ("Comedy", "Comedy"), ("Crime", "Crime"), ("Drama", "Drama"),
+                        ("Fantasy", "Fantasy"), ("History", "History"), ("Romance", "Romance"),
+                        ("Sci-Fi", "Sci-Fi"), ("Thriller", "Thriller")
+                    ], id="genre_select"),
+                    Label("Rating:"),
+                    Select([("G", "G"), ("PG", "PG"), ("PG-13", "PG-13"), ("R", "R"), ("TV-14", "TV-14"), ("TV-MA", "TV-MA"), ("TV-PG", "TV-PG")], id="rating_select"),
+                    classes="add_show_left_column"
                 ),
-                classes="add_show_form"
+                Container(
+                    Label("Release Date (YYYY-MM-DD):"),
+                    Input(placeholder="2024-01-01", id="release_date"),
+                    Label("Length (minutes):"),
+                    Input(placeholder="120", id="length"),
+                    Label("Access Group:"),
+                    Select([("Basic", "Basic"), ("Premium", "Premium")], id="access_group_select"),
+                    Container(
+                        Label("Cost to Buy:"),
+                        Input(placeholder="0.00", id="cost_to_buy"),
+                        id="cost_container",
+                        classes="cost_container hidden"
+                    ),
+                    classes="add_show_right_column"
+                ),
+                classes="add_show_layout"
+            ),
+            Horizontal(
+                Button("Add Show", id="add_show", variant="primary"),
+                Button("Cancel", id="cancel_add", variant="default"),
+                classes="modal_buttons"
             ),
             classes="modal_container_fullscreen"
         )
+    
+    def on_mount(self) -> None:
+        access_select = self.query_one("#access_group_select", Select)
+        access_select.watch(lambda: self.toggle_cost_visibility())
+    
+    def on_select_changed(self, event: Select.Changed) -> None:
+        if event.select.id == "access_group_select":
+            self.toggle_cost_visibility()
+    
+    def toggle_cost_visibility(self) -> None:
+        try:
+            access_group = self.query_one("#access_group_select", Select).value
+            cost_container = self.query_one("#cost_container")
+            
+            if access_group == "Premium":
+                cost_container.remove_class("hidden")
+            else:
+                cost_container.add_class("hidden")
+        except Exception:
+            pass
     
     def on_button_pressed(self, event: Button.Pressed) -> None:
         if event.button.id == "add_show":
@@ -107,12 +224,16 @@ class AddShowModal(ModalScreen):
             length = self.query_one("#length", Input).value
             genre = self.query_one("#genre_select", Select).value
             access_group = self.query_one("#access_group_select", Select).value
-            cost_to_buy = self.query_one("#cost_to_buy", Input).value
             
             if all([name, release_date, rating, director, length, genre, access_group]):
                 try:
                     length_int = int(length)
-                    cost_float = float(cost_to_buy) if cost_to_buy else 0.0
+                    
+                    if access_group == "Basic":
+                        cost_float = 0.0
+                    else:
+                        cost_to_buy = self.query_one("#cost_to_buy", Input).value
+                        cost_float = float(cost_to_buy) if cost_to_buy else 0.0
                     
                     self.dismiss({
                         "action": "add",
@@ -150,9 +271,10 @@ class EditShowModal(ModalScreen):
                 Select([("Basic", "Basic"), ("Premium", "Premium")], 
                       value=self.show.get("access_group", "Basic"), id="access_group_select"),
                 Label("Cost to Buy:"),
-                Input(placeholder="9.99", value=cost_str, id="cost_to_buy"),
+                Input(placeholder="0.00", value=cost_str, id="cost_to_buy"),
                 Horizontal(
                     Button("Update Show", id="update_show", variant="primary"),
+                    Button("Delete Show", id="delete_show", variant="error"),
                     Button("Cancel", id="cancel_edit", variant="default"),
                     classes="modal_buttons"
                 ),
@@ -167,7 +289,10 @@ class EditShowModal(ModalScreen):
             cost_to_buy = self.query_one("#cost_to_buy", Input).value
             
             try:
-                cost_float = float(cost_to_buy) if cost_to_buy else 0.0
+                if access_group == "Basic":
+                    cost_float = 0.0
+                else:
+                    cost_float = float(cost_to_buy) if cost_to_buy else 0.0
                 
                 self.dismiss({
                     "action": "update",
@@ -177,6 +302,12 @@ class EditShowModal(ModalScreen):
                 })
             except ValueError:
                 self.app.notify("Please enter a valid cost", severity="error")
+        elif event.button.id == "delete_show":
+            self.dismiss({
+                "action": "delete",
+                "show_id": self.show.get("show_id"),
+                "show_name": self.show.get("name", "Unknown")
+            })
         else:
             self.dismiss(None)
 
@@ -288,9 +419,9 @@ class MainScreen(Screen):
         elif event.button.id == "logout_btn":
             self.app.current_admin = None
             self.app.pop_screen()
-        elif event.button.id and event.button.id.startswith("delete_user_"):
-            user_id = int(event.button.id.replace("delete_user_", ""))
-            self.handle_delete_user(user_id)
+        elif event.button.id and event.button.id.startswith("manage_user_"):
+            user_id = int(event.button.id.replace("manage_user_", ""))
+            self.handle_manage_user(user_id)
         elif event.button.id == "add_show_btn":
             self.handle_add_show()
         elif event.button.id and event.button.id.startswith("edit_show_"):
@@ -326,8 +457,10 @@ class MainScreen(Screen):
         
         stats_result = await asyncio.to_thread(self.app.call_api, "get_statistics")
         
-        content.remove_children()
-        content.mount(Static("Admin Dashboard", classes="content_title"))
+        try:
+            content.query_one(LoadingIndicator).remove()
+        except:
+            pass
         
         if stats_result is not None and stats_result.get("success"):
             data = stats_result.get("data", {})
@@ -386,8 +519,9 @@ class MainScreen(Screen):
                         Static(f"Email: {user.get('email', '')}", classes="user_info"),
                         Static(f"Subscription: {user.get('subscription_level', '')}", classes="user_info"),
                         Static(f"Total Spent: ${user.get('total_spent', 0):.2f}", classes="user_info"),
+                        Static(f"Favorite Genre: {user.get('favourite_genre', 'Not set')}", classes="user_info"),
                         Static(f"Marketing Opt-in: {'Yes' if user.get('marketing_opt_in', False) else 'No'}", classes="user_info"),
-                        Button(f"Delete User", id=f"delete_user_{user.get('user_id')}", variant="error", classes="delete_button"),
+                        Button(f"Manage User", id=f"manage_user_{user.get('user_id')}", variant="primary", classes="manage_button"),
                         classes="user_card"
                     )
                     content.mount(user_widget)
@@ -399,18 +533,46 @@ class MainScreen(Screen):
     def load_users(self) -> None:
         self.load_users_async()
 
-    def handle_delete_user(self, user_id: int) -> None:
-        """Handle user deletion"""
+    def handle_manage_user(self, user_id: int) -> None:
+        """Handle user management"""
         user = next((u for u in self.users_cache if u["user_id"] == user_id), None)
         if user:
             def handle_modal_result(result):
-                if result and result.get("action") == "delete":
-                    self.delete_user(user_id)
+                if result:
+                    if result.get("action") == "delete":
+                        self.delete_user(user_id)
+                    elif result.get("action") == "update":
+                        self.update_user(result)
             
             self.app.push_screen(
-                DeleteConfirmModal(user["username"], user_id),
+                UserManagementModal(user),
                 handle_modal_result
             )
+
+    @work(exclusive=True)
+    async def update_user(self, update_data: Dict):
+        """Update user asynchronously"""
+        user_id = update_data["user_id"]
+        
+        if update_data.get("new_password"):
+            password_result = await asyncio.to_thread(
+                self.app.call_api, "change_password", 
+                user_id=user_id, new_password=update_data["new_password"]
+            )
+            if not (password_result and password_result.get("success")):
+                self.notify("Failed to update password", severity="error")
+                return
+        
+        subscription_result = await asyncio.to_thread(
+            self.app.call_api, "update_subscription", 
+            user_id=user_id, subscription_level=update_data["subscription_level"]
+        )
+        
+        if subscription_result and subscription_result.get("success"):
+            self.notify("User updated successfully!", severity="information")
+            self.load_users()
+        else:
+            self.notify("Failed to update user", severity="error")
 
     @work(exclusive=True)
     async def delete_user(self, user_id: int):
@@ -436,14 +598,16 @@ class MainScreen(Screen):
         
         result = await asyncio.to_thread(self.app.call_api, "get_all_shows")
         
-        content.query_one(LoadingIndicator).remove()
+        try:
+            content.query_one(LoadingIndicator).remove()
+        except:
+            pass
         
         if result is not None and result.get("success"):
             shows = result.get("data", [])
             self.shows_cache = shows
             
             if shows:
-                # Create grid layout like in user app
                 show_rows = []
                 for i in range(0, len(shows), 3):
                     row_shows = shows[i:i+3]
@@ -516,10 +680,36 @@ class MainScreen(Screen):
         show = next((s for s in self.shows_cache if s["show_id"] == show_id), None)
         if show:
             def handle_modal_result(result):
-                if result and result.get("action") == "update":
-                    self.update_show(result)
+                if result:
+                    if result.get("action") == "update":
+                        self.update_show(result)
+                    elif result.get("action") == "delete":
+                        self.confirm_delete_show(result["show_id"], result["show_name"])
             
             self.app.push_screen(EditShowModal(show), handle_modal_result)
+
+    def confirm_delete_show(self, show_id: int, show_name: str) -> None:
+        """Confirm show deletion"""
+        def handle_delete_result(result):
+            if result and result.get("action") == "delete":
+                self.delete_show(show_id)
+        
+        self.app.push_screen(
+            DeleteShowConfirmModal(show_name, show_id),
+            handle_delete_result
+        )
+
+    @work(exclusive=True)
+    async def delete_show(self, show_id: int):
+        """Delete show asynchronously"""
+        result = await asyncio.to_thread(self.app.call_api, "delete_show", show_id=show_id)
+        
+        if result is not None and result.get("success"):
+            self.notify("Show deleted successfully!", severity="information")
+            self.load_content()
+        else:
+            error_msg = result.get("message", "Unknown error") if result else "API connection failed"
+            self.notify("Failed to delete show: " + error_msg, severity="error")
 
     @work(exclusive=True)
     async def update_show(self, show_data: Dict):
@@ -554,8 +744,10 @@ class MainScreen(Screen):
         
         result = await asyncio.to_thread(self.app.call_api, "get_finances")
         
-        content.remove_children()
-        content.mount(Static("Financial Reports", classes="content_title"))
+        try:
+            content.query_one(LoadingIndicator).remove()
+        except:
+            pass
         
         if result is not None and result.get("success"):
             finances = result.get("data", [])
@@ -591,8 +783,10 @@ class MainScreen(Screen):
         
         result = await asyncio.to_thread(self.app.call_api, "get_statistics")
         
-        content.remove_children()
-        content.mount(Static("System Statistics", classes="content_title"))
+        try:
+            content.query_one(LoadingIndicator).remove()
+        except:
+            pass
         
         if result is not None and result.get("success"):
             data = result.get("data", {})
@@ -635,15 +829,25 @@ class MainScreen(Screen):
             self.buys_cache = buys
             
             if buys:
-                for buy in buys:
-                    buy_widget = Container(
-                        Static(f"Purchase ID: {buy.get('buy_id', '')}", classes="buy_title"),
-                        Static(f"User: {buy.get('username', '')} (ID: {buy.get('user_id', '')})", classes="buy_info"),
-                        Static(f"Show: {buy.get('show_name', '')} (ID: {buy.get('show_id', '')})", classes="buy_info"),
-                        Static(f"Date: {buy.get('buy_date', '')} | Cost: ${buy.get('cost', 0):.2f}", classes="buy_info"),
-                        classes="buy_card"
-                    )
-                    content.mount(buy_widget)
+                buy_rows = []
+                for i in range(0, len(buys), 2):
+                    row_buys = buys[i:i+2]
+                    row_cards = []
+                    for buy in row_buys:
+                        buy_widget = Container(
+                            Static(f"Purchase ID: {buy.get('buy_id', '')}", classes="buy_title"),
+                            Static(f"User: {buy.get('username', '')} (ID: {buy.get('user_id', '')})", classes="buy_info"),
+                            Static(f"Show: {buy.get('show_name', '')} (ID: {buy.get('show_id', '')})", classes="buy_info"),
+                            Static(f"Date: {buy.get('buy_date', '')}", classes="buy_info"),
+                            Static(f"Cost: ${buy.get('cost', 0):.2f}", classes="buy_info"),
+                            classes="buy_card_two_column"
+                        )
+                        row_cards.append(buy_widget)
+                    
+                    buy_rows.append(Horizontal(*row_cards, classes="buy_row"))
+                
+                buys_container = Vertical(*buy_rows, classes="buys_main_container")
+                content.mount(buys_container)
             else:
                 content.mount(Static("No purchases found", classes="empty_message"))
         else:
@@ -742,6 +946,11 @@ class EasyFlixAdminApp(App):
         overflow-y: auto;
     }
     
+    .refresh_button {
+        margin: 1 0;
+        width: 35;
+    }
+    
     .dashboard_section {
         background: #16213e;
         border: solid #e94560;
@@ -759,6 +968,8 @@ class EasyFlixAdminApp(App):
         border: solid #3498db;
         margin: 1;
         padding: 2;
+        height: auto;
+        min-height: 12;
     }
     
     .user_title {
@@ -822,11 +1033,26 @@ class EasyFlixAdminApp(App):
         margin: 0 0 0 1;
     }
     
-    .buy_card {
+    .buys_main_container {
+        width: 100%;
+        height: 1fr;
+        overflow-y: auto;
+    }
+    
+    .buy_row {
+        width: 100%;
+        height: auto;
+        margin: 1 0;
+    }
+    
+    .buy_card_two_column {
         background: #16213e;
         border: solid #9b59b6;
-        margin: 1;
+        margin: 0 1;
         padding: 2;
+        height: 12;
+        min-height: 12;
+        width: 1fr;
     }
     
     .buy_title {
@@ -847,8 +1073,8 @@ class EasyFlixAdminApp(App):
         padding: 2;
     }
     
-    .delete_button {
-        background: #e74c3c;
+    .manage_button {
+        background: #3498db;
         margin-top: 1;
         width: 25;
     }
@@ -861,6 +1087,14 @@ class EasyFlixAdminApp(App):
     
     .action_button {
         margin: 1;
+    }
+    
+    .cost_container {
+        margin: 1 0;
+    }
+    
+    .hidden {
+        display: none;
     }
     
     .loading_container {
@@ -914,10 +1148,45 @@ class EasyFlixAdminApp(App):
         align: center middle;
     }
     
-    .add_show_form {
+    .add_show_layout {
+        width: 100%;
+        height: auto;
+        margin: 1;
+    }
+    
+    .add_show_left_column {
+        width: 50%;
         padding: 1;
         height: auto;
+    }
+    
+    .add_show_right_column {
+        width: 50%;
+        padding: 1;
+        height: auto;
+    }
+    
+    .user_management_layout {
         width: 100%;
+        height: auto;
+        margin: 1;
+    }
+    
+    .user_info_column {
+        width: 50%;
+        padding: 1;
+        height: auto;
+    }
+    
+    .user_management_column {
+        width: 50%;
+        padding: 1;
+        height: auto;
+    }
+    
+    .user_info_text {
+        color: white;
+        margin: 1 0 0 1;
     }
     
     .edit_show_form {
@@ -959,6 +1228,11 @@ class EasyFlixAdminApp(App):
         background: #1a1a2e;
         border: solid #95a5a6;
         width: 100%;
+    }
+    
+    Checkbox {
+        margin: 1;
+        color: white;
     }
     
     Button {
