@@ -180,22 +180,36 @@ class EFAPI_Commands:
         thread.start()
     
     def authenticate_admin(self, username: str, password: str) -> str:
-        """Authenticate admin credentials"""
+        """Authenticate admin credentials using stored database values"""
         try:
-            # Hardcoded admin credentials
-            admin_username = "EF@dm1n"
-            admin_password = "EFP@55"
+            conn = self._get_connection()
+            cursor = conn.cursor()
             
-            if username == admin_username and password == admin_password:
-                admin_data = {
-                    "admin_id": 1,
-                    "username": admin_username,
-                    "role": "admin",
-                    "access_level": "full"
-                }
-                return self._format_response(True, admin_data, "Admin authentication successful")
+            cursor.execute("""
+                SELECT Admin_ID, Password_Hash, Salt, Username, Role
+                FROM ADMIN_CREDENTIALS 
+                WHERE Username = ?
+            """, (username,))
+            
+            result = cursor.fetchone()
+            conn.close()
+            
+            if result:
+                admin_id, stored_hash, salt, stored_username, role = result
+                input_hash = self._hash_password(password, salt)
+                
+                if input_hash == stored_hash:
+                    admin_data = {
+                        "admin_id": admin_id,
+                        "username": stored_username,
+                        "role": role,
+                        "access_level": "full"
+                    }
+                    return self._format_response(True, admin_data, "Admin authentication successful")
+                else:
+                    return self._format_response(False, message="Invalid admin credentials")
             else:
-                return self._format_response(False, message="Invalid admin credentials")
+                return self._format_response(False, message="Admin user not found")
                 
         except Exception as e:
             return self._format_response(False, message=f"Admin authentication error: {e}")
