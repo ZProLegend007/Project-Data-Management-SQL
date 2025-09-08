@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-EasyFlixAdmin - Administrator interface for EasyFlix streaming service
+EasyFlixAdmin - Administrator interface for EasyFlix streaming service with encrypted communication
 """
 
 import subprocess
@@ -8,6 +8,7 @@ import json
 import sys
 import os
 import asyncio
+import base64
 from textual.app import App, ComposeResult
 from textual.containers import Container, Horizontal, Vertical, ScrollableContainer, Center, Middle
 from textual.widgets import Button, Input, Label, Select, Static, Header, Footer, LoadingIndicator, Checkbox, DataTable
@@ -17,6 +18,48 @@ from textual.reactive import reactive
 from textual import work
 from typing import Dict, List, Optional, Any
 from datetime import datetime, date
+from cryptography.fernet import Fernet
+from cryptography.hazmat.primitives import hashes
+from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
+
+class EncryptionManager:
+    """Handles encryption and decryption of API communications"""
+    
+    def __init__(self, master_key: str = "EFS3cur3K3y"):
+        self.master_key = master_key.encode()
+        self.salt = b'EFS3cur3S@lt'
+        
+    def _derive_key(self) -> bytes:
+        """Derive encryption key from master key"""
+        kdf = PBKDF2HMAC(
+            algorithm=hashes.SHA256(),
+            length=32,
+            salt=self.salt,
+            iterations=100000,
+        )
+        key = base64.urlsafe_b64encode(kdf.derive(self.master_key))
+        return key
+    
+    def encrypt_data(self, data: str) -> str:
+        """Encrypt data and return base64 encoded string"""
+        try:
+            key = self._derive_key()
+            f = Fernet(key)
+            encrypted_data = f.encrypt(data.encode())
+            return base64.urlsafe_b64encode(encrypted_data).decode()
+        except Exception as e:
+            raise Exception(f"Encryption failed: {e}")
+    
+    def decrypt_data(self, encrypted_data: str) -> str:
+        """Decrypt base64 encoded data"""
+        try:
+            key = self._derive_key()
+            f = Fernet(key)
+            decoded_data = base64.urlsafe_b64decode(encrypted_data.encode())
+            decrypted_data = f.decrypt(decoded_data)
+            return decrypted_data.decode()
+        except Exception as e:
+            raise Exception(f"Decryption failed: {e}")
 
 class LoadingScreen(ModalScreen):
     """Loading screen modal"""
@@ -1307,37 +1350,42 @@ class EasyFlixAdminApp(App):
     def __init__(self):
         super().__init__()
         self.current_admin: Optional[Dict] = None
+        self.encryption = EncryptionManager()
     
     def on_mount(self) -> None:
         self.title = "EasyFlix Admin"
         self.push_screen(LoginScreen())
     
     def call_api(self, command: str, **kwargs) -> Optional[Dict]:
-        """Call the EFAPI with the given command and arguments"""
+        """Call the EFAPI with encrypted communication"""
         try:
             if not os.path.exists("EFAPI.py"):
                 self.notify("EFAPI.py not found in current directory", severity="error")
                 return None
             
-            cmd = [sys.executable, "EFAPI.py", "--command", command]
+            # Prepare encrypted request
+            request_data = {
+                "command": command,
+                "parameters": kwargs
+            }
             
-            for key, value in kwargs.items():
-                if key == 'marketing_opt_in' and isinstance(value, bool):
-                    if value:
-                        cmd.append("--marketing_opt_in_true")
-                    else:
-                        cmd.append("--marketing_opt_in_false")
-                elif isinstance(value, bool):
-                    if value:
-                        cmd.append(f"--{key}")
-                else:
-                    cmd.extend([f"--{key}", str(value)])
+            encrypted_request = self.encryption.encrypt_data(json.dumps(request_data))
+            
+            cmd = [sys.executable, "EFAPI.py", "--encrypted_data", encrypted_request]
             
             result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
             
             if result.returncode == 0:
                 try:
-                    return json.loads(result.stdout)
+                    response = json.loads(result.stdout)
+                    
+                    # Check if response is encrypted
+                    if response.get("encrypted"):
+                        decrypted_data = self.encryption.decrypt_data(response["data"])
+                        return json.loads(decrypted_data)
+                    else:
+                        return response
+                        
                 except json.JSONDecodeError:
                     self.notify("Invalid JSON response from API", severity="error")
                     return None
