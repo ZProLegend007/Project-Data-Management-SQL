@@ -59,94 +59,92 @@ class EFAPI_Commands:
         }
         return json.dumps(response, indent=2, default=str)
     
-    def _update_statistics_async(self):
-        """Update statistics and financials asynchronously"""
-        def update_stats():
-            try:
-                conn = self._get_connection()
-                cursor = conn.cursor()
-                
-                today = date.today()
-                now = datetime.now()
-                
-                # Calculate total users
-                cursor.execute("SELECT COUNT(*) FROM CUSTOMERS")
-                total_users = cursor.fetchone()[0]
-                
-                # Calculate subscription counts
-                cursor.execute("SELECT COUNT(*) FROM CUSTOMERS WHERE Subscription_Level = 'Premium'")
-                premium_subs = cursor.fetchone()[0]
-                cursor.execute("SELECT COUNT(*) FROM CUSTOMERS WHERE Subscription_Level = 'Basic'")
-                basic_subs = cursor.fetchone()[0]
-                total_subscriptions = premium_subs + basic_subs
-                
-                # Calculate total shows bought
-                cursor.execute("SELECT COUNT(*) FROM BUYS")
-                total_shows_bought = cursor.fetchone()[0]
-                
-                # Calculate revenues
-                cursor.execute("SELECT COALESCE(SUM(Cost), 0) FROM BUYS")
-                total_revenue_buys = cursor.fetchone()[0]
-                
-                # Calculate subscription revenues (Basic: $30, Premium: $80)
-                basic_subscription_revenue = basic_subs * 30.0
-                premium_subscription_revenue = premium_subs * 80.0
-                total_subscription_revenue = basic_subscription_revenue + premium_subscription_revenue
-                total_combined_revenue = total_revenue_buys + total_subscription_revenue
-                
-                # Check if record exists for today
-                cursor.execute('SELECT Date FROM STATISTICS WHERE Date = ?', (today,))
-                stats_exists = cursor.fetchone() is not None
-                
-                if stats_exists:
-                    # Update existing record
-                    cursor.execute('''
-                    UPDATE STATISTICS 
-                    SET Total_Shows_Bought = ?, Total_Subscriptions = ?, Premium_Subscriptions = ?, 
-                        Basic_Subscriptions = ?, Total_Users = ?, Last_Updated = ?
-                    WHERE Date = ?
-                    ''', (total_shows_bought, total_subscriptions, premium_subs, basic_subs, total_users, now, today))
-                else:
-                    # Insert new record
-                    cursor.execute('''
-                    INSERT INTO STATISTICS 
-                    (Date, Total_Shows_Bought, Total_Subscriptions, Premium_Subscriptions, Basic_Subscriptions, Total_Users, Last_Updated)
-                    VALUES (?, ?, ?, ?, ?, ?, ?)
-                    ''', (today, total_shows_bought, total_subscriptions, premium_subs, basic_subs, total_users, now))
-                
-                # Check if financials record exists for today
-                cursor.execute('SELECT Date FROM FINANCIALS WHERE Date = ?', (today,))
-                financials_exists = cursor.fetchone() is not None
-                
-                if financials_exists:
-                    # Update existing record
-                    cursor.execute('''
-                    UPDATE FINANCIALS 
-                    SET Total_Revenue_Buys = ?, Total_Revenue_Subscriptions = ?, Premium_Subscription_Revenue = ?,
-                        Basic_Subscription_Revenue = ?, Total_Combined_Revenue = ?, Last_Updated = ?
-                    WHERE Date = ?
-                    ''', (total_revenue_buys, total_subscription_revenue, premium_subscription_revenue, 
-                          basic_subscription_revenue, total_combined_revenue, now, today))
-                else:
-                    # Insert new record
-                    cursor.execute('''
-                    INSERT INTO FINANCIALS 
-                    (Date, Total_Revenue_Buys, Total_Revenue_Subscriptions, Premium_Subscription_Revenue, 
-                     Basic_Subscription_Revenue, Total_Combined_Revenue, Last_Updated)
-                    VALUES (?, ?, ?, ?, ?, ?, ?)
-                    ''', (today, total_revenue_buys, total_subscription_revenue, premium_subscription_revenue,
-                          basic_subscription_revenue, total_combined_revenue, now))
-                
-                # Update favourite genres for users opted into marketing
+    def _update_statistics_sync(self):
+        """Update statistics and financials synchronously"""
+        try:
+            conn = self._get_connection()
+            cursor = conn.cursor()
+            
+            today = date.today()
+            now = datetime.now()
+            
+            # Calculate total users
+            cursor.execute("SELECT COUNT(*) FROM CUSTOMERS")
+            total_users = cursor.fetchone()[0]
+            
+            # Calculate subscription counts
+            cursor.execute("SELECT COUNT(*) FROM CUSTOMERS WHERE Subscription_Level = 'Premium'")
+            premium_subs = cursor.fetchone()[0]
+            cursor.execute("SELECT COUNT(*) FROM CUSTOMERS WHERE Subscription_Level = 'Basic'")
+            basic_subs = cursor.fetchone()[0]
+            total_subscriptions = premium_subs + basic_subs
+            
+            # Calculate total shows bought
+            cursor.execute("SELECT COUNT(*) FROM BUYS")
+            total_shows_bought = cursor.fetchone()[0]
+            
+            # Calculate revenues
+            cursor.execute("SELECT COALESCE(SUM(Cost), 0) FROM BUYS")
+            total_revenue_buys = cursor.fetchone()[0]
+            
+            # Calculate subscription revenues (Basic: $30, Premium: $80)
+            basic_subscription_revenue = basic_subs * 30.0
+            premium_subscription_revenue = premium_subs * 80.0
+            total_subscription_revenue = basic_subscription_revenue + premium_subscription_revenue
+            total_combined_revenue = total_revenue_buys + total_subscription_revenue
+            
+            # Update or insert statistics
+            cursor.execute('SELECT Date FROM STATISTICS WHERE Date = ?', (today,))
+            if cursor.fetchone():
                 cursor.execute('''
-                SELECT User_ID, Shows FROM CUSTOMERS 
-                WHERE Marketing_Opt_In = 1 AND Shows IS NOT NULL AND Shows != ''
-                ''')
-                
-                users_with_shows = cursor.fetchall()
-                for user_id, shows_str in users_with_shows:
-                    if shows_str:
-                        show_ids = [int(x.strip()) for x in shows_str.split(',') if x.strip()]
+                UPDATE STATISTICS 
+                SET Total_Shows_Bought = ?, Total_Subscriptions = ?, Premium_Subscriptions = ?, 
+                    Basic_Subscriptions = ?, Total_Users = ?, Last_Updated = ?
+                WHERE Date = ?
+                ''', (total_shows_bought, total_subscriptions, premium_subs, basic_subs, total_users, now, today))
+            else:
+                cursor.execute('''
+                INSERT INTO STATISTICS 
+                (Date, Total_Shows_Bought, Total_Subscriptions, Premium_Subscriptions, Basic_Subscriptions, Total_Users, Last_Updated)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+                ''', (today, total_shows_bought, total_subscriptions, premium_subs, basic_subs, total_users, now))
+            
+            # Update or insert financials
+            cursor.execute('SELECT Date FROM FINANCIALS WHERE Date = ?', (today,))
+            if cursor.fetchone():
+                cursor.execute('''
+                UPDATE FINANCIALS 
+                SET Total_Revenue_Buys = ?, Total_Revenue_Subscriptions = ?, Premium_Subscription_Revenue = ?,
+                    Basic_Subscription_Revenue = ?, Total_Combined_Revenue = ?, Last_Updated = ?
+                WHERE Date = ?
+                ''', (total_revenue_buys, total_subscription_revenue, premium_subscription_revenue, 
+                      basic_subscription_revenue, total_combined_revenue, now, today))
+            else:
+                cursor.execute('''
+                INSERT INTO FINANCIALS 
+                (Date, Total_Revenue_Buys, Total_Revenue_Subscriptions, Premium_Subscription_Revenue, 
+                 Basic_Subscription_Revenue, Total_Combined_Revenue, Last_Updated)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+                ''', (today, total_revenue_buys, total_subscription_revenue, premium_subscription_revenue,
+                      basic_subscription_revenue, total_combined_revenue, now))
+            
+            # Update favourite genres for marketing opted-in users
+            cursor.execute('''
+            SELECT User_ID, Shows FROM CUSTOMERS 
+            WHERE Marketing_Opt_In = 1 AND Shows IS NOT NULL AND Shows != ''
+            ''')
+            
+            users_with_shows = cursor.fetchall()
+            for user_id, shows_str in users_with_shows:
+                if shows_str and shows_str.strip():
+                    try:
+                        # Parse show IDs from comma-separated string
+                        show_ids = []
+                        for show_str in shows_str.split(','):
+                            show_str = show_str.strip()
+                            if show_str and show_str.isdigit():
+                                show_ids.append(int(show_str))
+                        
                         if show_ids:
                             # Get genres for user's shows
                             placeholders = ','.join(['?' for _ in show_ids])
@@ -156,28 +154,61 @@ class EFAPI_Commands:
                             
                             genres = [row[0] for row in cursor.fetchall()]
                             if genres:
-                                # Find most common genre
+                                # Count genre occurrences
                                 genre_counts = {}
                                 for genre in genres:
-                                    genre_counts[genre] = genre_counts.get(genre, 0) + 1
+                                    if genre:
+                                        genre_counts[genre] = genre_counts.get(genre, 0) + 1
                                 
-                                favourite_genre = max(genre_counts, key=genre_counts.get)
-                                
-                                # Update user's favourite genre
-                                cursor.execute('''
-                                UPDATE CUSTOMERS SET Favourite_Genre = ? WHERE User_ID = ?
-                                ''', (favourite_genre, user_id))
-                
-                conn.commit()
-                conn.close()
-                
+                                if genre_counts:
+                                    # Find most common genre
+                                    favourite_genre = max(genre_counts, key=genre_counts.get)
+                                    
+                                    # Update user's favourite genre
+                                    cursor.execute('''
+                                    UPDATE CUSTOMERS SET Favourite_Genre = ? WHERE User_ID = ?
+                                    ''', (favourite_genre, user_id))
+                    except (ValueError, TypeError) as e:
+                        # Skip users with invalid show data
+                        continue
+            
+            conn.commit()
+            conn.close()
+            
+            return {
+                "total_users": total_users,
+                "premium_subs": premium_subs,
+                "basic_subs": basic_subs,
+                "total_shows_bought": total_shows_bought,
+                "total_revenue_buys": total_revenue_buys,
+                "total_combined_revenue": total_combined_revenue
+            }
+            
+        except Exception as e:
+            raise EFAPIError(f"Error updating statistics: {e}")
+    
+    def _update_statistics_async(self):
+        """Update statistics and financials asynchronously"""
+        def update_stats():
+            try:
+                self._update_statistics_sync()
             except Exception as e:
                 print(f"Error updating statistics: {e}")
+                import traceback
+                traceback.print_exc()
         
-        # Run in separate thread to not block main execution
+        # Run in separate thread
         thread = threading.Thread(target=update_stats)
         thread.daemon = True
         thread.start()
+    
+    def update_statistics(self) -> str:
+        """Manual command to update statistics and financials"""
+        try:
+            result = self._update_statistics_sync()
+            return self._format_response(True, result, "Statistics updated successfully")
+        except Exception as e:
+            return self._format_response(False, message=f"Failed to update statistics: {e}")
     
     def authenticate_admin(self, username: str, password: str) -> str:
         """Authenticate admin credentials using stored database values"""
