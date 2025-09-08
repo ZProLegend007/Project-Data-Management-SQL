@@ -220,12 +220,8 @@ class AddShowModal(ModalScreen):
                     Input(placeholder="120", id="length"),
                     Label("Access Group:"),
                     Select([("Basic", "Basic"), ("Premium", "Premium")], id="access_group_select"),
-                    Container(
-                        Label("Cost to Buy:"),
-                        Input(placeholder="0.00", id="cost_to_buy"),
-                        id="cost_container",
-                        classes="cost_container hidden"
-                    ),
+                    Label("Cost to Buy:", id="cost_label", classes="hidden"),
+                    Input(placeholder="0.00", id="cost_to_buy", classes="hidden"),
                     classes="add_show_right_column"
                 ),
                 classes="add_show_layout"
@@ -238,10 +234,6 @@ class AddShowModal(ModalScreen):
             classes="modal_container_fullscreen"
         )
     
-    def on_mount(self) -> None:
-        access_select = self.query_one("#access_group_select", Select)
-        access_select.watch(lambda: self.toggle_cost_visibility())
-    
     def on_select_changed(self, event: Select.Changed) -> None:
         if event.select.id == "access_group_select":
             self.toggle_cost_visibility()
@@ -249,12 +241,15 @@ class AddShowModal(ModalScreen):
     def toggle_cost_visibility(self) -> None:
         try:
             access_group = self.query_one("#access_group_select", Select).value
-            cost_container = self.query_one("#cost_container")
+            cost_label = self.query_one("#cost_label")
+            cost_input = self.query_one("#cost_to_buy")
             
             if access_group == "Premium":
-                cost_container.remove_class("hidden")
+                cost_label.remove_class("hidden")
+                cost_input.remove_class("hidden")
             else:
-                cost_container.add_class("hidden")
+                cost_label.add_class("hidden")
+                cost_input.add_class("hidden")
         except Exception:
             pass
     
@@ -482,12 +477,9 @@ class MainScreen(Screen):
                 button.variant = "default"
 
     def clear_content_area(self):
-        """Safely clear content area"""
+        """Properly clear content area with exclusive access"""
         content = self.query_one("#content_area")
-        try:
-            content.remove_children()
-        except Exception:
-            pass
+        content.remove_children()
 
     @work(exclusive=True)
     async def load_dashboard_async(self):
@@ -495,15 +487,14 @@ class MainScreen(Screen):
         self.clear_content_area()
         content = self.query_one("#content_area")
         
-        content.mount(Static("Admin Dashboard", classes="content_title"))
-        content.mount(LoadingIndicator())
+        title_widget = Static("Admin Dashboard", classes="content_title")
+        await content.mount(title_widget)
+        loading = LoadingIndicator()
+        await content.mount(loading)
         
         stats_result = await asyncio.to_thread(self.app.call_api, "get_statistics")
         
-        try:
-            content.query_one(LoadingIndicator).remove()
-        except:
-            pass
+        await loading.remove()
         
         if stats_result is not None and stats_result.get("success"):
             data = stats_result.get("data", {})
@@ -530,9 +521,9 @@ class MainScreen(Screen):
             ]
             
             for widget in dashboard_widgets:
-                content.mount(widget)
+                await content.mount(widget)
         else:
-            content.mount(Static("Error loading dashboard data", classes="error_message"))
+            await content.mount(Static("Error loading dashboard data", classes="error_message"))
 
     def load_dashboard(self) -> None:
         self.load_dashboard_async()
@@ -543,13 +534,14 @@ class MainScreen(Screen):
         self.clear_content_area()
         content = self.query_one("#content_area")
         
-        content.mount(Static("User Management", classes="content_title"))
-        content.mount(LoadingIndicator())
+        title_widget = Static("User Management", classes="content_title")
+        await content.mount(title_widget)
+        loading = LoadingIndicator()
+        await content.mount(loading)
         
         result = await asyncio.to_thread(self.app.call_api, "get_all_users")
         
-        content.remove_children()
-        content.mount(Static("User Management", classes="content_title"))
+        await loading.remove()
         
         if result is not None and result.get("success"):
             users = result.get("data", [])
@@ -567,11 +559,11 @@ class MainScreen(Screen):
                         Button(f"Manage User", id=f"manage_user_{user.get('user_id')}", variant="primary", classes="manage_button"),
                         classes="user_card"
                     )
-                    content.mount(user_widget)
+                    await content.mount(user_widget)
             else:
-                content.mount(Static("No users found", classes="empty_message"))
+                await content.mount(Static("No users found", classes="empty_message"))
         else:
-            content.mount(Static("Error loading users", classes="error_message"))
+            await content.mount(Static("Error loading users", classes="error_message"))
 
     def load_users(self) -> None:
         self.load_users_async()
@@ -635,16 +627,16 @@ class MainScreen(Screen):
         self.clear_content_area()
         content = self.query_one("#content_area")
         
-        content.mount(Static("Content Management", classes="content_title"))
-        content.mount(Button("Add New Show", id="add_show_btn", variant="success"))
-        content.mount(LoadingIndicator())
+        title_widget = Static("Content Management", classes="content_title")
+        await content.mount(title_widget)
+        add_button = Button("Add New Show", id="add_show_btn", variant="success")
+        await content.mount(add_button)
+        loading = LoadingIndicator()
+        await content.mount(loading)
         
         result = await asyncio.to_thread(self.app.call_api, "get_all_shows")
         
-        try:
-            content.query_one(LoadingIndicator).remove()
-        except:
-            pass
+        await loading.remove()
         
         if result is not None and result.get("success"):
             shows = result.get("data", [])
@@ -661,11 +653,11 @@ class MainScreen(Screen):
                     show_rows.append(Horizontal(*row_cards, classes="shows_row"))
                 
                 shows_container = Vertical(*show_rows, classes="shows_main_container")
-                content.mount(shows_container)
+                await content.mount(shows_container)
             else:
-                content.mount(Static("No shows found", classes="empty_message"))
+                await content.mount(Static("No shows found", classes="empty_message"))
         else:
-            content.mount(Static("Error loading shows", classes="error_message"))
+            await content.mount(Static("Error loading shows", classes="error_message"))
 
     def create_admin_show_card(self, show: Dict) -> Container:
         """Create an admin show card widget"""
@@ -749,7 +741,8 @@ class MainScreen(Screen):
         
         if result is not None and result.get("success"):
             self.notify("Show deleted successfully!", severity="information")
-            self.load_content()
+            if self.current_view == "content":
+                self.load_content()
         else:
             error_msg = result.get("message", "Unknown error") if result else "API connection failed"
             self.notify("Failed to delete show: " + error_msg, severity="error")
@@ -772,7 +765,8 @@ class MainScreen(Screen):
         if (access_result is not None and access_result.get("success") and 
             cost_result is not None and cost_result.get("success")):
             self.notify("Show updated successfully!", severity="information")
-            self.load_content()
+            if self.current_view == "content":
+                self.load_content()
         else:
             self.notify("Failed to update show", severity="error")
 
@@ -782,15 +776,14 @@ class MainScreen(Screen):
         self.clear_content_area()
         content = self.query_one("#content_area")
         
-        content.mount(Static("Financial Reports", classes="content_title"))
-        content.mount(LoadingIndicator())
+        title_widget = Static("Financial Reports", classes="content_title")
+        await content.mount(title_widget)
+        loading = LoadingIndicator()
+        await content.mount(loading)
         
         result = await asyncio.to_thread(self.app.call_api, "get_finances")
         
-        try:
-            content.query_one(LoadingIndicator).remove()
-        except:
-            pass
+        await loading.remove()
         
         if result is not None and result.get("success"):
             finances = result.get("data", [])
@@ -806,11 +799,11 @@ class MainScreen(Screen):
                         Static(f"Basic Subscriptions: ${finance.get('basic_subscription_revenue', 0):.2f}", classes="finance_info"),
                         classes="finance_card"
                     )
-                    content.mount(finance_widget)
+                    await content.mount(finance_widget)
             else:
-                content.mount(Static("No financial data found", classes="empty_message"))
+                await content.mount(Static("No financial data found", classes="empty_message"))
         else:
-            content.mount(Static("Error loading financial data", classes="error_message"))
+            await content.mount(Static("Error loading financial data", classes="error_message"))
 
     def load_financials(self) -> None:
         self.load_financials_async()
@@ -821,15 +814,14 @@ class MainScreen(Screen):
         self.clear_content_area()
         content = self.query_one("#content_area")
         
-        content.mount(Static("System Statistics", classes="content_title"))
-        content.mount(LoadingIndicator())
+        title_widget = Static("System Statistics", classes="content_title")
+        await content.mount(title_widget)
+        loading = LoadingIndicator()
+        await content.mount(loading)
         
         result = await asyncio.to_thread(self.app.call_api, "get_statistics")
         
-        try:
-            content.query_one(LoadingIndicator).remove()
-        except:
-            pass
+        await loading.remove()
         
         if result is not None and result.get("success"):
             data = result.get("data", {})
@@ -846,9 +838,9 @@ class MainScreen(Screen):
                 Static(f"Last Updated: {stats.get('last_updated', 'N/A')}", classes="stat_item"),
                 classes="statistics_section"
             )
-            content.mount(stats_widget)
+            await content.mount(stats_widget)
         else:
-            content.mount(Static("Error loading statistics", classes="error_message"))
+            await content.mount(Static("Error loading statistics", classes="error_message"))
 
     def load_statistics(self) -> None:
         self.load_statistics_async()
@@ -859,13 +851,14 @@ class MainScreen(Screen):
         self.clear_content_area()
         content = self.query_one("#content_area")
         
-        content.mount(Static("Purchase History", classes="content_title"))
-        content.mount(LoadingIndicator())
+        title_widget = Static("Purchase History", classes="content_title")
+        await content.mount(title_widget)
+        loading = LoadingIndicator()
+        await content.mount(loading)
         
         result = await asyncio.to_thread(self.app.call_api, "get_all_buys")
         
-        content.remove_children()
-        content.mount(Static("Purchase History", classes="content_title"))
+        await loading.remove()
         
         if result is not None and result.get("success"):
             buys = result.get("data", [])
@@ -890,11 +883,11 @@ class MainScreen(Screen):
                     buy_rows.append(Horizontal(*row_cards, classes="buy_row"))
                 
                 buys_container = Vertical(*buy_rows, classes="buys_main_container")
-                content.mount(buys_container)
+                await content.mount(buys_container)
             else:
-                content.mount(Static("No purchases found", classes="empty_message"))
+                await content.mount(Static("No purchases found", classes="empty_message"))
         else:
-            content.mount(Static("Error loading purchase history", classes="error_message"))
+            await content.mount(Static("Error loading purchase history", classes="error_message"))
 
     def load_buys(self) -> None:
         self.load_buys_async()
@@ -1140,10 +1133,6 @@ class EasyFlixAdminApp(App):
     .action_button {
         margin: 1;
         height: 3;
-    }
-    
-    .cost_container {
-        margin: 1 0;
     }
     
     .hidden {
