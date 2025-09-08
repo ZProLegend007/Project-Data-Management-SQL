@@ -95,7 +95,7 @@ class AddShowModal(ModalScreen):
                 ),
                 classes="add_show_form"
             ),
-            classes="modal_container_large"
+            classes="modal_container_fullscreen"
         )
     
     def on_button_pressed(self, event: Button.Pressed) -> None:
@@ -140,6 +140,9 @@ class EditShowModal(ModalScreen):
         self.show = show
     
     def compose(self) -> ComposeResult:
+        cost_value = self.show.get("cost_to_buy", 0.0)
+        cost_str = str(cost_value) if cost_value is not None else "0.0"
+        
         yield Container(
             Static(f"Edit Show: {self.show.get('name', 'Unknown')}", classes="modal_title"),
             Container(
@@ -147,7 +150,7 @@ class EditShowModal(ModalScreen):
                 Select([("Basic", "Basic"), ("Premium", "Premium")], 
                       value=self.show.get("access_group", "Basic"), id="access_group_select"),
                 Label("Cost to Buy:"),
-                Input(placeholder="9.99", value=str(self.show.get("cost_to_buy", 0.0)), id="cost_to_buy"),
+                Input(placeholder="9.99", value=cost_str, id="cost_to_buy"),
                 Horizontal(
                     Button("Update Show", id="update_show", variant="primary"),
                     Button("Cancel", id="cancel_edit", variant="default"),
@@ -440,20 +443,40 @@ class MainScreen(Screen):
             self.shows_cache = shows
             
             if shows:
-                for show in shows:
-                    show_widget = Container(
-                        Static(f"Show: {show.get('name', '')}", classes="show_title"),
-                        Static(f"Genre: {show.get('genre', '')} | Rating: {show.get('rating', '')}", classes="show_info"),
-                        Static(f"Access: {show.get('access_group', '')} | Cost: ${show.get('cost_to_buy', 0):.2f}", classes="show_info"),
-                        Static(f"Director: {show.get('director', '')} | Length: {show.get('length', '')} min", classes="show_info"),
-                        Button("Edit", id=f"edit_show_{show.get('show_id')}", variant="warning", classes="edit_button"),
-                        classes="show_card"
-                    )
-                    content.mount(show_widget)
+                # Create grid layout like in user app
+                show_rows = []
+                for i in range(0, len(shows), 3):
+                    row_shows = shows[i:i+3]
+                    row_cards = []
+                    for show in row_shows:
+                        row_cards.append(self.create_admin_show_card(show))
+                    
+                    show_rows.append(Horizontal(*row_cards, classes="shows_row"))
+                
+                shows_container = Vertical(*show_rows, classes="shows_main_container")
+                content.mount(shows_container)
             else:
                 content.mount(Static("No shows found", classes="empty_message"))
         else:
             content.mount(Static("Error loading shows", classes="error_message"))
+
+    def create_admin_show_card(self, show: Dict) -> Container:
+        """Create an admin show card widget"""
+        cost_to_buy = show.get('cost_to_buy')
+        cost_display = f"${cost_to_buy:.2f}" if cost_to_buy is not None else "Free"
+        
+        return Container(
+            Static(show.get("name", "Unknown"), classes="show_title"),
+            Static(f"Genre: {show.get('genre', 'N/A')}", classes="show_info"),
+            Static(f"Rating: {show.get('rating', 'N/A')}", classes="show_info"),
+            Static(f"Director: {show.get('director', 'N/A')}", classes="show_info"),
+            Static(f"Length: {show.get('length', 'N/A')} min", classes="show_info"),
+            Static(f"Release: {show.get('release_date', 'N/A')}", classes="show_info"),
+            Static(f"Access: {show.get('access_group', '')}", classes="show_info"),
+            Static(f"Cost: {cost_display}", classes="show_info"),
+            Button("Edit", id=f"edit_show_{show.get('show_id')}", variant="warning", classes="edit_button"),
+            classes="admin_show_card"
+        )
 
     def load_content(self) -> None:
         self.load_content_async()
@@ -749,11 +772,25 @@ class EasyFlixAdminApp(App):
         margin: 0 0 0 1;
     }
     
-    .show_card {
+    .shows_main_container {
+        width: 100%;
+        height: 1fr;
+        overflow-y: auto;
+    }
+    
+    .shows_row {
+        width: 100%;
+        height: auto;
+        margin: 1 0;
+    }
+    
+    .admin_show_card {
         background: #16213e;
         border: solid #f39c12;
-        margin: 1;
-        padding: 2;
+        margin: 0 1;
+        padding: 1;
+        height: auto;
+        width: 1fr;
     }
     
     .show_title {
@@ -813,13 +850,13 @@ class EasyFlixAdminApp(App):
     .delete_button {
         background: #e74c3c;
         margin-top: 1;
-        width: 100px;
+        width: 25;
     }
     
     .edit_button {
         background: #f39c12;
         margin-top: 1;
-        width: 100px;
+        width: 100%;
     }
     
     .action_button {
@@ -845,17 +882,8 @@ class EasyFlixAdminApp(App):
     .modal_container_fullscreen {
         background: #16213e;
         border: solid #e94560;
-        width: 60vw;
-        height: 50vh;
-        align: center middle;
-        padding: 2;
-    }
-    
-    .modal_container_large {
-        background: #16213e;
-        border: solid #e94560;
-        width: 80vw;
-        height: 80vh;
+        width: 100vw;
+        height: 100vh;
         align: center middle;
         padding: 2;
     }
