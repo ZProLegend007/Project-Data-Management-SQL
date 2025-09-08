@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 EasyFlix API (EFAPI.py)
-Secure API interface for EasyFlix database operations
+Secure API interface for EasyFlix database operations with encrypted communication
 """
 
 import sqlite3
@@ -10,17 +10,61 @@ import json
 import hashlib
 import os
 import sys
+import base64
 from datetime import date, datetime
 from typing import Dict, List, Optional, Any
+from cryptography.fernet import Fernet
+from cryptography.hazmat.primitives import hashes
+from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
 
 class EFAPIError(Exception):
     """Custom exception for EFAPI errors"""
     pass
 
+class EncryptionManager:
+    """Handles encryption and decryption of API communications"""
+    
+    def __init__(self, master_key: str = "EFS3cur3K3y"):
+        self.master_key = master_key.encode()
+        self.salt = b'EFS3cur3S@lt'
+        
+    def _derive_key(self) -> bytes:
+        """Derive encryption key from master key"""
+        kdf = PBKDF2HMAC(
+            algorithm=hashes.SHA256(),
+            length=32,
+            salt=self.salt,
+            iterations=100000,
+        )
+        key = base64.urlsafe_b64encode(kdf.derive(self.master_key))
+        return key
+    
+    def encrypt_data(self, data: str) -> str:
+        """Encrypt data and return base64 encoded string"""
+        try:
+            key = self._derive_key()
+            f = Fernet(key)
+            encrypted_data = f.encrypt(data.encode())
+            return base64.urlsafe_b64encode(encrypted_data).decode()
+        except Exception as e:
+            raise EFAPIError(f"Encryption failed: {e}")
+    
+    def decrypt_data(self, encrypted_data: str) -> str:
+        """Decrypt base64 encoded data"""
+        try:
+            key = self._derive_key()
+            f = Fernet(key)
+            decoded_data = base64.urlsafe_b64decode(encrypted_data.encode())
+            decrypted_data = f.decrypt(decoded_data)
+            return decrypted_data.decode()
+        except Exception as e:
+            raise EFAPIError(f"Decryption failed: {e}")
+
 class EFAPI_Commands:
     def __init__(self, db_path: str = "easyflix.db", password: str = "E@syFl1xP@ss"):
         self.db_path = db_path
         self.password = password
+        self.encryption = EncryptionManager()
         self._verify_database()
     
     def _verify_database(self):
@@ -48,14 +92,33 @@ class EFAPI_Commands:
         return os.urandom(16).hex()
     
     def _format_response(self, success: bool, data: Any = None, message: str = "") -> str:
-        """Format API response as JSON"""
+        """Format API response as JSON with encryption"""
         response = {
             "success": success,
             "message": message,
             "data": data,
             "timestamp": datetime.now().isoformat()
         }
-        return json.dumps(response, indent=2, default=str)
+        
+        json_response = json.dumps(response, indent=2, default=str)
+        
+        try:
+            encrypted_response = self.encryption.encrypt_data(json_response)
+            return json.dumps({
+                "encrypted": True,
+                "data": encrypted_response
+            })
+        except Exception:
+            # Fallback to unencrypted if encryption fails
+            return json_response
+    
+    def _auto_update_statistics(self):
+        """Auto update statistics - direct synchronous call"""
+        try:
+            self._update_statistics_sync()
+        except Exception:
+            # Silent fail for auto updates
+            pass
     
     def _update_statistics_sync(self):
         """Update statistics and financials synchronously"""
@@ -184,14 +247,6 @@ class EFAPI_Commands:
             
         except Exception as e:
             raise EFAPIError(f"Error updating statistics: {e}")
-    
-    def _auto_update_statistics(self):
-        """Auto update statistics - direct synchronous call"""
-        try:
-            self._update_statistics_sync()
-        except Exception:
-            # Silent fail for auto updates
-            pass
     
     def update_statistics(self) -> str:
         """Manual command to update statistics and financials"""
@@ -1075,10 +1130,49 @@ class EFAPI_Commands:
                 
         except Exception as e:
             return self._format_response(False, message=f"Error updating favourite genre: {e}")
+    
+    def delete_show(self, show_id: int) -> str:
+        """Delete show from catalog"""
+        try:
+            conn = self._get_connection()
+            cursor = conn.cursor()
+            
+            # Delete associated buys first
+            cursor.execute("DELETE FROM BUYS WHERE Show_ID = ?", (show_id,))
+            
+            # Remove show from user collections
+            cursor.execute("SELECT User_ID, Shows FROM CUSTOMERS WHERE Shows IS NOT NULL AND Shows != ''")
+            users_with_shows = cursor.fetchall()
+            
+            for user_id, shows_str in users_with_shows:
+                if shows_str:
+                    show_ids = [int(x.strip()) for x in shows_str.split(',') if x.strip() and x.strip().isdigit()]
+                    if show_id in show_ids:
+                        show_ids.remove(show_id)
+                        new_shows = ','.join(map(str, show_ids)) if show_ids else ''
+                        cursor.execute("UPDATE CUSTOMERS SET Shows = ? WHERE User_ID = ?", (new_shows, user_id))
+            
+            # Delete the show
+            cursor.execute("DELETE FROM SHOWS WHERE Show_ID = ?", (show_id,))
+            
+            if cursor.rowcount > 0:
+                conn.commit()
+                conn.close()
+                
+                # Update statistics immediately
+                self._auto_update_statistics()
+                
+                return self._format_response(True, message="Show deleted successfully")
+            else:
+                conn.close()
+                return self._format_response(False, message="Show not found")
+                
+        except Exception as e:
+            return self._format_response(False, message=f"Error deleting show: {e}")
 
 def main():
-    parser = argparse.ArgumentParser(description="EasyFlix API")
-    parser.add_argument('--command', required=True, help='API command to execute')
+    parser = argparse.ArgumentParser(description="EasyFlix API with Encrypted Communication")
+    parser.add_argument('--command', help='API command to execute')
     parser.add_argument('--username', help='Username for authentication')
     parser.add_argument('--password', help='Password for authentication')
     parser.add_argument('--email', help='Email for user creation')
@@ -1100,13 +1194,39 @@ def main():
     parser.add_argument('--marketing_opt_in_true', action='store_true', help='Set marketing opt-in to true')
     parser.add_argument('--marketing_opt_in_false', action='store_true', help='Set marketing opt-in to false')
     parser.add_argument('--year', type=int, help='Release year for search')
+    parser.add_argument('--encrypted_data', help='Encrypted request data')
         
     args = parser.parse_args()
     
     try:
         api = EFAPI_Commands(args.db_path)
         
-        # Get the method from the API class
+        # Handle encrypted requests
+        if args.encrypted_data:
+            try:
+                decrypted_request = api.encryption.decrypt_data(args.encrypted_data)
+                request_data = json.loads(decrypted_request)
+                command = request_data.get('command')
+                kwargs = request_data.get('parameters', {})
+                
+                method = getattr(api, command, None)
+                if not method:
+                    print(api._format_response(False, message=f"Unknown command: {command}"))
+                    return
+                
+                result = method(**kwargs)
+                print(result)
+                return
+                
+            except Exception as e:
+                print(api._format_response(False, message=f"Error processing encrypted request: {e}"))
+                return
+        
+        # Handle regular command-line requests (for backward compatibility)
+        if not args.command:
+            print(api._format_response(False, message="No command specified"))
+            return
+            
         method = getattr(api, args.command, None)
         if not method:
             print(api._format_response(False, message=f"Unknown command: {args.command}"))
@@ -1162,11 +1282,14 @@ def main():
         print(result)
         
     except TypeError as e:
-        print(EFAPI_Commands(args.db_path)._format_response(False, message=f"Invalid arguments for command {args.command}: {e}"))
+        error_api = EFAPI_Commands(args.db_path if args.db_path else "easyflix.db")
+        print(error_api._format_response(False, message=f"Invalid arguments for command {args.command}: {e}"))
     except EFAPIError as e:
-        print(EFAPI_Commands(args.db_path)._format_response(False, message=str(e)))
+        error_api = EFAPI_Commands(args.db_path if args.db_path else "easyflix.db") 
+        print(error_api._format_response(False, message=str(e)))
     except Exception as e:
-        print(EFAPI_Commands(args.db_path)._format_response(False, message=f"Unexpected error: {e}"))
+        error_api = EFAPI_Commands(args.db_path if args.db_path else "easyflix.db")
+        print(error_api._format_response(False, message=f"Unexpected error: {e}"))
 
 if __name__ == "__main__":
     main()
