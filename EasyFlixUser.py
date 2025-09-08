@@ -525,7 +525,7 @@ class MainScreen(Screen):
                     for i in range(0, len(shows), 3):
                         row_shows = shows[i:i+3]
                         row_cards = []
-                        for show in row_shows:
+                        for j, show in enumerate(row_shows):
                             row_cards.append(self.create_show_card(show, show["show_id"] in user_show_ids))
                         
                         show_rows.append(Horizontal(*row_cards, classes="shows_row"))
@@ -573,7 +573,7 @@ class MainScreen(Screen):
                 for i in range(0, len(shows), 3):
                     row_shows = shows[i:i+3]
                     row_cards = []
-                    for show in row_shows:
+                    for j, show in enumerate(row_shows):
                         row_cards.append(self.create_my_show_card(show))
                     
                     show_rows.append(Horizontal(*row_cards, classes="shows_row"))
@@ -640,6 +640,8 @@ class MainScreen(Screen):
             disabled=button_disabled
         )
         
+        card_classes = f"show_card {'premium_card' if is_premium else 'basic_card'}"
+        
         return Container(
             Static(show.get("name", "Unknown"), classes="show_title"),
             Static(f"Genre: {show.get('genre', 'N/A')}", classes="show_info"),
@@ -648,7 +650,7 @@ class MainScreen(Screen):
             Static(f"Length: {show.get('length', 'N/A')} min", classes="show_info"),
             Static(f"Release: {show.get('release_date', 'N/A')}", classes="show_info"),
             button,
-            classes="show_card premium_card" if is_premium else "show_card basic_card"
+            classes=card_classes
         )
 
     def create_my_show_card(self, show: Dict) -> Container:
@@ -909,6 +911,7 @@ class EasyFlixUserApp(App):
         background: #2F2F2F;
         border: solid #696969;
         width: 100%;
+        transition: border 0.3s in_out_cubic;
     }
     
     Input:focus {
@@ -931,6 +934,11 @@ class EasyFlixUserApp(App):
         background: #2F2F2F;
         border: solid #696969;
         width: 1fr;
+        transition: border 0.3s in_out_cubic;
+    }
+    
+    Select:focus {
+        border: solid #FF8C00;
     }
     
     .filter_select {
@@ -971,12 +979,6 @@ class EasyFlixUserApp(App):
         height: 3;
         text-align: center;
         content-align: center middle;
-    }
-    
-    .sidebar_button:hover {
-        background: #FF8C00;
-        color: #000000;
-        border: solid #FFD700;
     }
     
     .menu_title {
@@ -1058,49 +1060,50 @@ class EasyFlixUserApp(App):
     .basic_button {
         background: #FF8C00;
         margin-top: 1;
+        height: 3;
     }
     
     .basic_button:hover {
         background: #FFB84D;
-        border: solid #FFD700;
     }
     
     .premium_button {
         background: #FFD700;
         color: black;
         margin-top: 1;
+        height: 3;
     }
     
     .premium_button:hover {
         background: #FFF700;
-        border: solid #FF8C00;
     }
     
     .premium_included {
         background: #32CD32;
         margin-top: 1;
+        height: 3;
     }
     
     .premium_included:hover {
         background: #90EE90;
-        border: solid #228B22;
     }
     
     .disabled_button {
         background: #696969;
         color: #A0A0A0;
         margin-top: 1;
+        height: 3;
     }
     
     .remove_button {
         background: #DC143C;
         margin-top: 1;
         width: 100%;
+        height: 3;
     }
     
     .remove_button:hover {
         background: #FF6B6B;
-        border: solid #FF0000;
     }
     
     .account_info {
@@ -1174,12 +1177,11 @@ class EasyFlixUserApp(App):
     
     Button {
         margin: 1;
+        height: 3;
     }
     
     Button:hover {
         text-style: bold;
-        border: solid #FF8C00;
-        background: #555555;
     }
     
     Button.-primary {
@@ -1189,7 +1191,6 @@ class EasyFlixUserApp(App):
     
     Button.-primary:hover {
         background: #FFB84D;
-        border: solid #FFD700;
     }
     
     Button.-success {
@@ -1199,7 +1200,6 @@ class EasyFlixUserApp(App):
     
     Button.-success:hover {
         background: #90EE90;
-        border: solid #228B22;
     }
     
     Button.-warning {
@@ -1209,7 +1209,6 @@ class EasyFlixUserApp(App):
     
     Button.-warning:hover {
         background: #FFF700;
-        border: solid #FF8C00;
     }
     
     Button.-error {
@@ -1219,7 +1218,6 @@ class EasyFlixUserApp(App):
     
     Button.-error:hover {
         background: #FF6B6B;
-        border: solid #FF0000;
     }
     
     Button.-default {
@@ -1229,7 +1227,6 @@ class EasyFlixUserApp(App):
     
     Button.-default:hover {
         background: #A9A9A9;
-        border: solid #DCDCDC;
     }
     """
     
