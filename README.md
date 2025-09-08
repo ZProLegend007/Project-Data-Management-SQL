@@ -9,7 +9,8 @@ This lists changes to the program since the research stage due to unforseen issu
   - Usually this would be handled by an API middleman as this would all be server hosted. However instead, the user program will call an 'API' program that will perform checks and authentication such as comparing hashes.
     - This turned out to be a major undertaking but worth it
       - The API will communicate through json with the programs
-      - Will add encryption 
+      - Will add encryption
+        - AES, SHA256 with PBKDF2HMAC and 10000 iterations along with base64 encoding
       
   - Encrypted database to ensure proper security and protection against unauthorised access attempts.
  
