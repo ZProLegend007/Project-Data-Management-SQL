@@ -2,6 +2,8 @@
 
 ---
 
+Parts of this will be updated and done relevant to the final project in part 2, so if it is not up to par for full marks in a section check over there for anything that may be missing.
+
 ## INVESTIGATE
 
 ### Timeline and Schedule
@@ -12,26 +14,29 @@
 | | Problem analysis | 1 day | |
 | | Database design & ERD | 1 day | |
 | | Interface mockups | 1 day | |
-| **Phase 2** | Development | 4 days | 40% |
+| **Phase 2** | Development | 5 days | 100% |
 | | Database implementation | 1 day | |
 | | Core functions | 1 day | |
 | | User interface | 1 day | |
 | | Admin interface | 1 day | |
-| **Phase 3** | Testing & Documentation | 2 days | 0% |
+| | Extra buffer time for unexpected delays | 1 day | |
+| **Phase 3** | Testing & Documentation | 2 days | 100% |
 | | System testing | 1 day | |
 | | Final documentation | 1 day | |
 
 ### Problem Outline
 
-EasyFlix is an online media service, they need a software solution for customers so they can create an account, purchase a subscription, rent shows, e.t.c. They also need a solution to track financial information and record sales.
+EasyFlix is an online media service, they need a software solution for customers so they can create an account, purchase a subscription, rent shows, e.t.c. They also need a solution to track financial information and record sales. This should be done using a software solution that interacts with an SQL database, reading, storing and removing values.
 
 ### Problem Description
 
 EasyFlix has many movies and tv shows available to watch. It offers two subscription levels, basic and premium. Basic users will have access to all movies that are in the basic access group. EasyFlix offers many shows in the basic subscription but some shows may be marked as premium. These premium shows can be rented for an additional cost. Users who purchase the premium subscription will gain access to all basic and premium shows without needing to rent.
 
-The owners need a software solution that allows users to access the EasyFlix catalogue with a subscription and purchase shows.
+The owners need a software solution that allows users to access the EasyFlix catalogue with a subscription and purchase shows. They need to be able to sign up and log in, and interact with the available shows and more.
 
-They also need a software solution for managing the users, tracking sales, statistics, finances, adding/removing available shows and changing show access groups.
+They also need an admin software solution for managing the users, tracking sales, statistics, finances, adding/removing available shows and changing show access groups.
+
+This all needs to be done with an SQL database to store the values, ensuring optimal and consistent security, integrity and availability of the data.
 
 #### Solutions:
 
