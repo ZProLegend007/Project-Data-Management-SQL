@@ -10,4 +10,5 @@ Password: EFP@55
 
 #### Click links below for research and evaluation
 ### [Part 1 - Research and Investigation](https://github.com/ZProLegend007/Project-Data-Management-SQL/blob/main/Part1.md)
+### [Part 2 - Developement Notes and Project Evaluation & Retrospective](https://github.com/ZProLegend007/Project-Data-Management-SQL/blob/main/Part2.md)
 
