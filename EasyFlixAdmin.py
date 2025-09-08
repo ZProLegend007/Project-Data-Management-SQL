@@ -461,7 +461,7 @@ class MainScreen(Screen):
             self.load_buys()
         elif event.button.id == "logout_btn":
             self.app.current_admin = None
-            self.app.pop_screen()
+            self.app.switch_screen(LoginScreen())
         elif event.button.id and event.button.id.startswith("manage_user_"):
             user_id = int(event.button.id.replace("manage_user_", ""))
             self.handle_manage_user(user_id)
