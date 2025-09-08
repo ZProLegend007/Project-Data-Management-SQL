@@ -10,8 +10,6 @@ import json
 import hashlib
 import os
 import sys
-import asyncio
-import threading
 from datetime import date, datetime
 from typing import Dict, List, Optional, Any
 
@@ -168,7 +166,7 @@ class EFAPI_Commands:
                                     cursor.execute('''
                                     UPDATE CUSTOMERS SET Favourite_Genre = ? WHERE User_ID = ?
                                     ''', (favourite_genre, user_id))
-                    except (ValueError, TypeError) as e:
+                    except (ValueError, TypeError):
                         # Skip users with invalid show data
                         continue
             
@@ -187,20 +185,13 @@ class EFAPI_Commands:
         except Exception as e:
             raise EFAPIError(f"Error updating statistics: {e}")
     
-    def _update_statistics_async(self):
-        """Update statistics and financials asynchronously"""
-        def update_stats():
-            try:
-                self._update_statistics_sync()
-            except Exception as e:
-                print(f"Error updating statistics: {e}")
-                import traceback
-                traceback.print_exc()
-        
-        # Run in separate thread
-        thread = threading.Thread(target=update_stats)
-        thread.daemon = True
-        thread.start()
+    def _auto_update_statistics(self):
+        """Auto update statistics - direct synchronous call"""
+        try:
+            self._update_statistics_sync()
+        except Exception:
+            # Silent fail for auto updates
+            pass
     
     def update_statistics(self) -> str:
         """Manual command to update statistics and financials"""
@@ -314,8 +305,8 @@ class EFAPI_Commands:
             conn.commit()
             conn.close()
             
-            # Update statistics asynchronously
-            self._update_statistics_async()
+            # Update statistics immediately
+            self._auto_update_statistics()
             
             return self._format_response(True, {"user_id": user_id, "charged": subscription_cost}, "User created successfully")
             
@@ -536,8 +527,8 @@ class EFAPI_Commands:
             conn.commit()
             conn.close()
             
-            # Update statistics asynchronously
-            self._update_statistics_async()
+            # Update statistics immediately
+            self._auto_update_statistics()
             
             return self._format_response(True, {"charged": charge}, "Subscription updated successfully")
                 
@@ -560,8 +551,8 @@ class EFAPI_Commands:
                 conn.commit()
                 conn.close()
                 
-                # Update statistics asynchronously
-                self._update_statistics_async()
+                # Update statistics immediately
+                self._auto_update_statistics()
                 
                 return self._format_response(True, message="Marketing preference updated successfully")
             else:
@@ -637,8 +628,8 @@ class EFAPI_Commands:
             conn.commit()
             conn.close()
             
-            # Update statistics asynchronously
-            self._update_statistics_async()
+            # Update statistics immediately
+            self._auto_update_statistics()
             
             return self._format_response(True, message="Show added successfully")
             
@@ -685,8 +676,8 @@ class EFAPI_Commands:
             conn.commit()
             conn.close()
             
-            # Update statistics asynchronously
-            self._update_statistics_async()
+            # Update statistics immediately
+            self._auto_update_statistics()
             
             return self._format_response(True, message="Show removed successfully")
             
@@ -779,55 +770,25 @@ class EFAPI_Commands:
             conn = self._get_connection()
             cursor = conn.cursor()
             
-            # Check if new columns exist
-            cursor.execute("PRAGMA table_info(STATISTICS)")
-            stats_columns = [row[1] for row in cursor.fetchall()]
-            
-            cursor.execute("PRAGMA table_info(FINANCIALS)")
-            finance_columns = [row[1] for row in cursor.fetchall()]
-            
-            # Build queries based on available columns
-            if 'Premium_Subscriptions' in stats_columns and 'Basic_Subscriptions' in stats_columns:
-                stats_query = """
-                    SELECT Date, Total_Shows_Bought, Total_Subscriptions, Premium_Subscriptions, 
-                           Basic_Subscriptions, Total_Users, Last_Updated
-                    FROM STATISTICS
-                    ORDER BY Date DESC
-                    LIMIT 1
-                """
-            else:
-                stats_query = """
-                    SELECT Date, Total_Shows_Bought, Total_Subscriptions, 
-                           0 as Premium_Subscriptions, 0 as Basic_Subscriptions,
-                           Total_Users, Last_Updated
-                    FROM STATISTICS
-                    ORDER BY Date DESC
-                    LIMIT 1
-                """
-            
-            cursor.execute(stats_query)
+            # Get latest statistics
+            cursor.execute("""
+                SELECT Date, Total_Shows_Bought, Total_Subscriptions, Premium_Subscriptions, 
+                       Basic_Subscriptions, Total_Users, Last_Updated
+                FROM STATISTICS
+                ORDER BY Date DESC
+                LIMIT 1
+            """)
             stats_row = cursor.fetchone()
             
-            if 'Premium_Subscription_Revenue' in finance_columns and 'Basic_Subscription_Revenue' in finance_columns:
-                finance_query = """
-                    SELECT Date, Total_Revenue_Buys, Total_Revenue_Subscriptions, 
-                           Premium_Subscription_Revenue, Basic_Subscription_Revenue,
-                           Total_Combined_Revenue, Last_Updated
-                    FROM FINANCIALS
-                    ORDER BY Date DESC
-                    LIMIT 1
-                """
-            else:
-                finance_query = """
-                    SELECT Date, Total_Revenue_Buys, Total_Revenue_Subscriptions, 
-                           0.00 as Premium_Subscription_Revenue, 0.00 as Basic_Subscription_Revenue,
-                           Total_Combined_Revenue, Last_Updated
-                    FROM FINANCIALS
-                    ORDER BY Date DESC
-                    LIMIT 1
-                """
-            
-            cursor.execute(finance_query)
+            # Get latest financials
+            cursor.execute("""
+                SELECT Date, Total_Revenue_Buys, Total_Revenue_Subscriptions, 
+                       Premium_Subscription_Revenue, Basic_Subscription_Revenue,
+                       Total_Combined_Revenue, Last_Updated
+                FROM FINANCIALS
+                ORDER BY Date DESC
+                LIMIT 1
+            """)
             finance_row = cursor.fetchone()
             conn.close()
             
@@ -863,28 +824,13 @@ class EFAPI_Commands:
             conn = self._get_connection()
             cursor = conn.cursor()
             
-            # Check if new columns exist
-            cursor.execute("PRAGMA table_info(FINANCIALS)")
-            finance_columns = [row[1] for row in cursor.fetchall()]
-            
-            if 'Premium_Subscription_Revenue' in finance_columns and 'Basic_Subscription_Revenue' in finance_columns:
-                finance_query = """
-                    SELECT Date, Total_Revenue_Buys, Total_Revenue_Subscriptions, 
-                           Premium_Subscription_Revenue, Basic_Subscription_Revenue,
-                           Total_Combined_Revenue, Last_Updated
-                    FROM FINANCIALS
-                    ORDER BY Date DESC
-                """
-            else:
-                finance_query = """
-                    SELECT Date, Total_Revenue_Buys, Total_Revenue_Subscriptions, 
-                           0.00 as Premium_Subscription_Revenue, 0.00 as Basic_Subscription_Revenue,
-                           Total_Combined_Revenue, Last_Updated
-                    FROM FINANCIALS
-                    ORDER BY Date DESC
-                """
-            
-            cursor.execute(finance_query)
+            cursor.execute("""
+                SELECT Date, Total_Revenue_Buys, Total_Revenue_Subscriptions, 
+                       Premium_Subscription_Revenue, Basic_Subscription_Revenue,
+                       Total_Combined_Revenue, Last_Updated
+                FROM FINANCIALS
+                ORDER BY Date DESC
+            """)
             
             finances = []
             for row in cursor.fetchall():
@@ -920,8 +866,8 @@ class EFAPI_Commands:
                 conn.commit()
                 conn.close()
                 
-                # Update statistics asynchronously
-                self._update_statistics_async()
+                # Update statistics immediately
+                self._auto_update_statistics()
                 
                 return self._format_response(True, message="User account deleted successfully")
             else:
@@ -974,8 +920,8 @@ class EFAPI_Commands:
             conn.commit()
             conn.close()
             
-            # Update statistics asynchronously
-            self._update_statistics_async()
+            # Update statistics immediately
+            self._auto_update_statistics()
             
             return self._format_response(True, {"show_id": show_id}, "Show added successfully")
             
@@ -997,6 +943,10 @@ class EFAPI_Commands:
             if cursor.rowcount > 0:
                 conn.commit()
                 conn.close()
+                
+                # Update statistics immediately
+                self._auto_update_statistics()
+                
                 return self._format_response(True, message="Show access group updated successfully")
             else:
                 conn.close()
@@ -1020,6 +970,10 @@ class EFAPI_Commands:
             if cursor.rowcount > 0:
                 conn.commit()
                 conn.close()
+                
+                # Update statistics immediately
+                self._auto_update_statistics()
+                
                 return self._format_response(True, message="Show purchase cost updated successfully")
             else:
                 conn.close()
@@ -1111,8 +1065,8 @@ class EFAPI_Commands:
                 conn.commit()
                 conn.close()
                 
-                # Update statistics asynchronously
-                self._update_statistics_async()
+                # Update statistics immediately
+                self._auto_update_statistics()
                 
                 return self._format_response(True, message="Favourite genre updated successfully")
             else:
