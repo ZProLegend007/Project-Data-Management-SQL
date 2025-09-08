@@ -39,6 +39,8 @@ This lists changes to the program since the research stage due to unforseen issu
 - **When a user opts out of marketing, their data is still in the database**
   - Ensure marketing data is cleared on opt out
  
+- **BECAUSE TEXTUAL IS RETARDED ON SOME TABS, CLICKING THE SAME TAB TRIGGERING A RELOAD WILL CAUSE A CRASH. IM SO DONE. THERE IS NO FIX FOR THIS. WILL BE A FUTURE IMPROVEMENT.**
+
 #### Notes
 
 In order to make this authentic, and to be able to fully use the API and sql commands, I needed to make something proper. So I may have gone a little over the top and this was a bad idea especially considering the time I had to do this, but hopefully it's worth it. 
@@ -48,6 +50,8 @@ This project should 100% reflect my abilities and understanding of all the topic
 The API (EFAPI) responds to query's in formatted json.
 
 This is SO INCREDIBLY PAINFUL. THIS SHOULD HAVE BEEN FINISHED AGES AGO!!! GITHUB KEEPS CRASHING MY CHROME ON LINUX, IN ORDER TO STOP LONG GPU HANGS I AM SOFTWARE RENDERING AND THE STUPID RECALCULATE STATISTICS BUTTON WANTS TO CRASH THE WHOLE PROGRAM NO MATTER WHAT I DO FOR NO APPARENT REASON SO IM JUST GOING TO FREAKING GET RID OF IT (IT SHOULDNT EVEN BE NEEDED TECHNICALLY AS EVERYTHING _SHOULD_ UPDATE AFTER EVERY DATABASE ALTERING FUNCTION FROM THE API). GRRR.
+
+
 
 Adding encrypted comminication for auth.
 
