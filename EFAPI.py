@@ -121,7 +121,7 @@ class EFAPI_Commands:
             pass
     
     def _update_statistics_sync(self):
-        """Update statistics and financials synchronously"""
+        """Update statistics and financials synchronously using optimized SQL"""
         try:
             conn = self._get_connection()
             cursor = conn.cursor()
@@ -129,26 +129,29 @@ class EFAPI_Commands:
             today = date.today()
             now = datetime.now()
             
-            # Calculate total users
-            cursor.execute("SELECT COUNT(*) FROM CUSTOMERS")
-            total_users = cursor.fetchone()[0]
+            # Get aggregated statistics in one query using GROUP BY
+            cursor.execute("""
+                SELECT 
+                    COUNT(*) as total_users,
+                    SUM(CASE WHEN Subscription_Level = 'Premium' THEN 1 ELSE 0 END) as premium_subs,
+                    SUM(CASE WHEN Subscription_Level = 'Basic' THEN 1 ELSE 0 END) as basic_subs,
+                    COALESCE(SUM(Total_Spent), 0) as total_spent
+                FROM CUSTOMERS
+            """)
             
-            # Calculate subscription counts
-            cursor.execute("SELECT COUNT(*) FROM CUSTOMERS WHERE Subscription_Level = 'Premium'")
-            premium_subs = cursor.fetchone()[0]
-            cursor.execute("SELECT COUNT(*) FROM CUSTOMERS WHERE Subscription_Level = 'Basic'")
-            basic_subs = cursor.fetchone()[0]
+            result = cursor.fetchone()
+            total_users, premium_subs, basic_subs, customer_spent = result
             total_subscriptions = premium_subs + basic_subs
             
-            # Calculate total shows bought
+            # Get total shows bought count
             cursor.execute("SELECT COUNT(*) FROM BUYS")
             total_shows_bought = cursor.fetchone()[0]
             
-            # Calculate revenues
+            # Get total revenue from buys
             cursor.execute("SELECT COALESCE(SUM(Cost), 0) FROM BUYS")
             total_revenue_buys = cursor.fetchone()[0]
             
-            # Calculate subscription revenues (Basic: $30, Premium: $80)
+            # Calculate subscription revenues
             basic_subscription_revenue = basic_subs * 30.0
             premium_subscription_revenue = premium_subs * 80.0
             total_subscription_revenue = basic_subscription_revenue + premium_subscription_revenue
@@ -189,48 +192,36 @@ class EFAPI_Commands:
                 ''', (today, total_revenue_buys, total_subscription_revenue, premium_subscription_revenue,
                       basic_subscription_revenue, total_combined_revenue, now))
             
-            # Update favourite genres for marketing opted-in users
+            # Update favourite genres for marketing opted-in users using optimized query
             cursor.execute('''
-            SELECT User_ID, Shows FROM CUSTOMERS 
-            WHERE Marketing_Opt_In = 1 AND Shows IS NOT NULL AND Shows != ''
+            SELECT c.User_ID, c.Shows, 
+                   GROUP_CONCAT(s.Genre) as genres
+            FROM CUSTOMERS c
+            LEFT JOIN SHOWS s ON INSTR(',' || c.Shows || ',', ',' || s.Show_ID || ',') > 0
+            WHERE c.Marketing_Opt_In = 1 AND c.Shows IS NOT NULL AND c.Shows != ''
+            GROUP BY c.User_ID, c.Shows
             ''')
             
-            users_with_shows = cursor.fetchall()
-            for user_id, shows_str in users_with_shows:
-                if shows_str and shows_str.strip():
+            users_with_genres = cursor.fetchall()
+            for user_id, shows_str, genres_str in users_with_genres:
+                if genres_str:
                     try:
-                        # Parse show IDs from comma-separated string
-                        show_ids = []
-                        for show_str in shows_str.split(','):
-                            show_str = show_str.strip()
-                            if show_str and show_str.isdigit():
-                                show_ids.append(int(show_str))
+                        # Count genre occurrences
+                        genre_counts = {}
+                        for genre in genres_str.split(','):
+                            if genre and genre.strip():
+                                clean_genre = genre.strip()
+                                genre_counts[clean_genre] = genre_counts.get(clean_genre, 0) + 1
                         
-                        if show_ids:
-                            # Get genres for user's shows
-                            placeholders = ','.join(['?' for _ in show_ids])
-                            cursor.execute(f'''
-                            SELECT Genre FROM SHOWS WHERE Show_ID IN ({placeholders})
-                            ''', show_ids)
+                        if genre_counts:
+                            # Find most common genre
+                            favourite_genre = max(genre_counts, key=genre_counts.get)
                             
-                            genres = [row[0] for row in cursor.fetchall()]
-                            if genres:
-                                # Count genre occurrences
-                                genre_counts = {}
-                                for genre in genres:
-                                    if genre:
-                                        genre_counts[genre] = genre_counts.get(genre, 0) + 1
-                                
-                                if genre_counts:
-                                    # Find most common genre
-                                    favourite_genre = max(genre_counts, key=genre_counts.get)
-                                    
-                                    # Update user's favourite genre
-                                    cursor.execute('''
-                                    UPDATE CUSTOMERS SET Favourite_Genre = ? WHERE User_ID = ?
-                                    ''', (favourite_genre, user_id))
+                            # Update user's favourite genre
+                            cursor.execute('''
+                            UPDATE CUSTOMERS SET Favourite_Genre = ? WHERE User_ID = ?
+                            ''', (favourite_genre, user_id))
                     except (ValueError, TypeError):
-                        # Skip users with invalid show data
                         continue
             
             conn.commit()
@@ -490,12 +481,18 @@ class EFAPI_Commands:
             return self._format_response(False, message=f"Error retrieving shows: {e}")
     
     def get_available_genres(self) -> str:
-        """Get all available genres"""
+        """Get all available genres using GROUP BY"""
         try:
             conn = self._get_connection()
             cursor = conn.cursor()
             
-            cursor.execute("SELECT DISTINCT Genre FROM SHOWS ORDER BY Genre")
+            cursor.execute("""
+                SELECT Genre, COUNT(*) as show_count 
+                FROM SHOWS 
+                GROUP BY Genre 
+                ORDER BY Genre
+            """)
+            
             genres = [row[0] for row in cursor.fetchall()]
             
             conn.close()
@@ -505,12 +502,18 @@ class EFAPI_Commands:
             return self._format_response(False, message=f"Error retrieving genres: {e}")
     
     def get_available_ratings(self) -> str:
-        """Get all available ratings"""
+        """Get all available ratings using GROUP BY"""
         try:
             conn = self._get_connection()
             cursor = conn.cursor()
             
-            cursor.execute("SELECT DISTINCT Rating FROM SHOWS ORDER BY Rating")
+            cursor.execute("""
+                SELECT Rating, COUNT(*) as show_count 
+                FROM SHOWS 
+                GROUP BY Rating 
+                ORDER BY Rating
+            """)
+            
             ratings = [row[0] for row in cursor.fetchall()]
             
             conn.close()
@@ -789,17 +792,25 @@ class EFAPI_Commands:
         except Exception as e:
             return self._format_response(False, message=f"Error retrieving user shows: {e}")
     
-    def get_all_users(self) -> str:
-        """Get all users (admin only)"""
+    def get_all_users(self, subscription_filter: str = None) -> str:
+        """Get all users with optional subscription filtering (admin only)"""
         try:
             conn = self._get_connection()
             cursor = conn.cursor()
             
-            cursor.execute("""
+            query = """
                 SELECT User_ID, Username, Email, Subscription_Level, Total_Spent, Favourite_Genre, Marketing_Opt_In
                 FROM CUSTOMERS
-                ORDER BY Username
-            """)
+            """
+            params = []
+            
+            if subscription_filter and subscription_filter in ['Basic', 'Premium']:
+                query += " WHERE Subscription_Level = ?"
+                params.append(subscription_filter)
+            
+            query += " ORDER BY Username"
+            
+            cursor.execute(query, params)
             
             users = []
             for row in cursor.fetchall():
@@ -814,10 +825,44 @@ class EFAPI_Commands:
                 })
             
             conn.close()
-            return self._format_response(True, users, f"Retrieved {len(users)} users")
+            filter_msg = f" with {subscription_filter} subscription" if subscription_filter else ""
+            return self._format_response(True, users, f"Retrieved {len(users)} users{filter_msg}")
             
         except Exception as e:
             return self._format_response(False, message=f"Error retrieving users: {e}")
+    
+    def get_users_by_subscription(self, subscription_level: str) -> str:
+        """Get users filtered by subscription level using GROUP BY"""
+        try:
+            conn = self._get_connection()
+            cursor = conn.cursor()
+            
+            cursor.execute("""
+                SELECT User_ID, Username, Email, Subscription_Level, Total_Spent, 
+                       Favourite_Genre, Marketing_Opt_In,
+                       COUNT(*) OVER (PARTITION BY Subscription_Level) as subscription_count
+                FROM CUSTOMERS
+                WHERE Subscription_Level = ?
+                ORDER BY Username
+            """, (subscription_level,))
+            
+            users = []
+            for row in cursor.fetchall():
+                users.append({
+                    "user_id": row[0],
+                    "username": row[1],
+                    "email": row[2],
+                    "subscription_level": row[3],
+                    "total_spent": row[4],
+                    "favourite_genre": row[5],
+                    "marketing_opt_in": bool(row[6])
+                })
+            
+            conn.close()
+            return self._format_response(True, users, f"Retrieved {len(users)} {subscription_level} users")
+            
+        except Exception as e:
+            return self._format_response(False, message=f"Error retrieving users by subscription: {e}")
     
     def get_statistics(self) -> str:
         """Get system statistics"""
@@ -1038,7 +1083,7 @@ class EFAPI_Commands:
             return self._format_response(False, message=f"Error updating show cost: {e}")
     
     def get_all_buys(self) -> str:
-        """Get all current buys (admin only)"""
+        """Get all current buys using JOIN for better performance (admin only)"""
         try:
             conn = self._get_connection()
             cursor = conn.cursor()
@@ -1047,8 +1092,8 @@ class EFAPI_Commands:
                 SELECT b.Buy_ID, b.User_ID, c.Username, b.Show_ID, s.Name,
                        b.Buy_Date, b.Cost
                 FROM BUYS b
-                JOIN CUSTOMERS c ON b.User_ID = c.User_ID
-                JOIN SHOWS s ON b.Show_ID = s.Show_ID
+                INNER JOIN CUSTOMERS c ON b.User_ID = c.User_ID
+                INNER JOIN SHOWS s ON b.Show_ID = s.Show_ID
                 ORDER BY b.Buy_Date DESC
             """)
             
@@ -1180,6 +1225,7 @@ def main():
     parser.add_argument('--show_id', type=int, help='Show ID')
     parser.add_argument('--access_group', help='Access group (Basic/Premium)')
     parser.add_argument('--subscription_level', help='Subscription level')
+    parser.add_argument('--subscription_filter', help='Filter users by subscription level')
     parser.add_argument('--db_path', default='easyflix.db', help='Database path')
     parser.add_argument('--new_password', help='New password for password change')
     parser.add_argument('--name', help='Show name')
@@ -1250,6 +1296,8 @@ def main():
             kwargs['access_group'] = args.access_group
         if args.subscription_level:
             kwargs['subscription_level'] = args.subscription_level
+        if args.subscription_filter:
+            kwargs['subscription_filter'] = args.subscription_filter
         if args.new_password:
             kwargs['new_password'] = args.new_password
         if args.name:
