@@ -13,6 +13,7 @@ This lists changes to the program since the research stage due to unforseen issu
         - AES, SHA256 with PBKDF2HMAC and 10000 iterations along with base64 encoding
       
   - Encrypted database to ensure proper security and protection against unauthorised access attempts.
+    - Hypothetically the whole database could be encrypted in to gibberish txt and then decrypted when needed, then re-encrypted after use with whatever changes. This would protect from database reads as well
  
 - **Users should not be able to _rent_ basic shows**
   - Fixed
