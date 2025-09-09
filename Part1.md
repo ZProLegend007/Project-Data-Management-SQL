@@ -23,7 +23,9 @@
 | | Final documentation | 1 day | |
 
 Phase 1 - Research and design appropriate solution to the problem. Ensure proper planning and infrastructure to build on is created.
+
 Phase 2 - Begin developement, noting down changes and relevant information during the process. Create programs and database.
+
 Phase 3 - Test system and create final documentation on project and how well it solved the issue.
 
 ### Problem Outline
@@ -87,6 +89,7 @@ EasyFlixAdmin is another Python-based application designed for an administrator 
      - Change show access group
      - Change show rent cost
 - Admins able to see rentals, financial statistics, users, overall information
+- Data needs to be easily input-able one way or another (will be done automatically through GUI, hence user application)
 - Information readily available to authorised parties
 - Information readily editable to authorised parties
 
