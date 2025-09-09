@@ -4,6 +4,8 @@
 2. **RUN init.py BEFORE ANYTHING ELSE** - this sets up the database ready for use.
 3. Run the programs, I recommend starting with EasyFlixUser and making 1 or 2 accounts to test some stuff, then use EasyFlixAdmin. You can use them side to side as well.
 
+Use Ctrl-Q to exit (or just q for most screens)
+
 **Admin login credentials:**
 
 Username: EF@dm1n
