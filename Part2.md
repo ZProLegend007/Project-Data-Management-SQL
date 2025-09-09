@@ -220,6 +220,7 @@ CREATE INDEX idx_buys_user_date ON BUYS(User_ID, Buy_Date);
 
 **1. Interface Stability**
 - Clicking the same navigation tab multiple times could (past, however still on user application) cause application crash
+- Some fixes and protections have been implemented, but rapid switching can also trigger crashes
 - **Cause**: Textual framework limitation with event handling
 - **Workaround**: User education and interface design to discourage duplicate clicks (lol)
 
