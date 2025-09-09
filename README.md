@@ -1,3 +1,5 @@
+6077 _lines_ of code and text in this repo.
+
 ### How to run
 
 1. Download a zip of the repo.
