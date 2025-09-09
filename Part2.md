@@ -312,11 +312,14 @@ CREATE INDEX idx_buys_user_date ON BUYS(User_ID, Buy_Date);
 - Performance optimization and indexing
 - Enhanced error handling and user feedback
 - Mobile application development using API layer
+- Live updates for admin statistics on loop
 
 **2. Medium-term Development (6-12 months)**
 - Advanced analytics and reporting dashboard
 - Content recommendation engine implementation
 - Multi-tenant architecture for franchise operations
+- Better GUI using non-terminal based gui language
+- Implement server hosted API
 
 **3. Long-term Vision (1-2 years)**
 - Cloud deployment with auto-scaling capabilities
