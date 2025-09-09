@@ -399,10 +399,12 @@ class MainScreen(Screen):
     """Main admin application screen"""
     
     current_view = reactive("dashboard")
+    current_search_filters = {}
     users_cache = []
     shows_cache = []
     buys_cache = []
     statistics_cache = {}
+    interface_built = False
     
     def compose(self) -> ComposeResult:
         yield Header()
@@ -466,6 +468,22 @@ class MainScreen(Screen):
             show_id = int(event.button.id.replace("edit_show_", ""))
             self.handle_edit_show(show_id)
 
+    def on_select_changed(self, event: Select.Changed) -> None:
+        if event.select.id == "subscription_filter":
+            filter_value = event.value
+            # Treat empty, None, or "All" as no filter
+            if not filter_value or filter_value == "All" or filter_value == Select.BLANK:
+                self.current_search_filters = {}
+            else:
+                self.current_search_filters = {"subscription": filter_value}
+            self.apply_filters()
+
+    def apply_filters(self):
+        """Apply current filters and search"""
+        if not self.interface_built or self.current_view != "users":
+            return
+        self.refresh_users_data()
+
     def update_sidebar_buttons(self, active_button_id: str):
         """Update sidebar button styles"""
         button_ids = ["dashboard_btn", "users_btn", "content_btn", "financials_btn", "statistics_btn", "buys_btn"]
@@ -477,9 +495,161 @@ class MainScreen(Screen):
                 button.variant = "default"
 
     def clear_content_area(self):
-        """Properly clear content area with exclusive access"""
+        """Properly clear content area"""
         content = self.query_one("#content_area")
         content.remove_children()
+        self.interface_built = False
+
+    def build_users_interface(self):
+        """Build the users interface once - synchronous to ensure completion before data load"""
+        if self.interface_built:
+            return
+        
+        content = self.query_one("#content_area")
+        
+        # Check if interface widgets already exist
+        existing_users_area = content.query("#users_content_area")
+        if existing_users_area:
+            # Interface already built, just return
+            self.interface_built = True
+            return
+            
+        subscription_options = [("All", "All"), ("Basic", "Basic"), ("Premium", "Premium")]
+        
+        interface_widgets = [
+            Static("User Management", classes="content_title"),
+            Horizontal(
+                Select(subscription_options, value="All", id="subscription_filter", classes="filter_select"),
+                classes="filters_row"
+            ),
+            Container(id="users_content_area", classes="users_content")
+        ]
+        
+        try:
+            for widget in interface_widgets:
+                content.mount(widget)
+            # Only set flag after successful mounting
+            self.interface_built = True
+        except Exception:
+            # If mounting fails, ensure the flag remains false
+            self.interface_built = False
+            raise
+
+    @work(exclusive=True)
+    async def refresh_users_data(self):
+        """Refresh only the users data without rebuilding interface"""
+        if not self.interface_built:
+            return
+            
+        content = self.query_one("#content_area")
+        users_content = content.query_one("#users_content_area")
+        
+        users_content.remove_children()
+        
+        import time
+        unique_id = f"users_loading_{int(time.time() * 1000)}"
+        loading = LoadingIndicator(id=unique_id)
+        await users_content.mount(loading)
+        
+        try:
+            if self.current_search_filters.get("subscription"):
+                result = await asyncio.to_thread(self.app.call_api, "get_users_by_subscription", 
+                                               subscription_level=self.current_search_filters["subscription"])
+            else:
+                result = await asyncio.to_thread(self.app.call_api, "get_all_users")
+            
+            await loading.remove()
+            
+            if result is not None and result.get("success"):
+                users = result.get("data", [])
+                self.users_cache = users
+                
+                if users:
+                    for user in users:
+                        user_widget = Container(
+                            Static(f"User: {user.get('username', '')}", classes="user_title"),
+                            Static(f"Email: {user.get('email', '')}", classes="user_info"),
+                            Static(f"Subscription: {user.get('subscription_level', '')}", classes="user_info"),
+                            Static(f"Total Spent: ${user.get('total_spent', 0):.2f}", classes="user_info"),
+                            Static(f"Favorite Genre: {user.get('favourite_genre', 'Not set')}", classes="user_info"),
+                            Static(f"Marketing Opt-in: {'Yes' if user.get('marketing_opt_in', False) else 'No'}", classes="user_info"),
+                            Button(f"Manage User", id=f"manage_user_{user.get('user_id')}", variant="primary", classes="manage_button"),
+                            classes="user_card"
+                        )
+                        await users_content.mount(user_widget)
+                else:
+                    filter_msg = f" with {self.current_search_filters.get('subscription')} subscription" if self.current_search_filters.get("subscription") else ""
+                    await users_content.mount(Static(f"No users found{filter_msg}", classes="empty_message"))
+            else:
+                await users_content.mount(Static("Error loading users", classes="error_message"))
+                
+        except Exception as e:
+            try:
+                await loading.remove()
+            except:
+                pass
+            await users_content.mount(Static(f"Error loading users: {e}", classes="error_message"))
+
+    def load_users(self) -> None:
+        """Load and display users - same pattern as user app"""
+        self.clear_content_area()
+        self.build_users_interface()
+        self.refresh_users_data()
+
+    def handle_manage_user(self, user_id: int) -> None:
+        """Handle user management"""
+        user = next((u for u in self.users_cache if u["user_id"] == user_id), None)
+        if user:
+            def handle_modal_result(result):
+                if result:
+                    if result.get("action") == "delete":
+                        self.delete_user(user_id)
+                    elif result.get("action") == "update":
+                        self.update_user(result)
+            
+            self.app.push_screen(
+                UserManagementModal(user),
+                handle_modal_result
+            )
+
+    @work(exclusive=True)
+    async def update_user(self, update_data: Dict):
+        """Update user asynchronously"""
+        user_id = update_data["user_id"]
+        
+        if update_data.get("new_password"):
+            password_result = await asyncio.to_thread(
+                self.app.call_api, "change_password", 
+                user_id=user_id, new_password=update_data["new_password"]
+            )
+            if not (password_result and password_result.get("success")):
+                self.notify("Failed to update password", severity="error")
+                return
+        
+        subscription_result = await asyncio.to_thread(
+            self.app.call_api, "update_subscription", 
+            user_id=user_id, subscription_level=update_data["subscription_level"]
+        )
+        
+        if subscription_result and subscription_result.get("success"):
+            self.notify("User updated successfully!", severity="information")
+            if self.current_view == "users":
+                self.refresh_users_data()
+        else:
+            self.notify("Failed to update user", severity="error")
+
+    @work(exclusive=True)
+    async def delete_user(self, user_id: int):
+        """Delete user asynchronously"""
+        result = await asyncio.to_thread(self.app.call_api, "delete_user", user_id=user_id)
+        
+        if result is not None and result.get("success"):
+            self.notify("User deleted successfully!", severity="information")
+            if self.current_view == "users":
+                self.refresh_users_data()
+        else:
+            error_msg = result.get("message", "Unknown error") if result else "API connection failed"
+            self.notify("Failed to delete user: " + error_msg, severity="error")
 
     @work(exclusive=True)
     async def load_dashboard_async(self):
@@ -527,99 +697,6 @@ class MainScreen(Screen):
 
     def load_dashboard(self) -> None:
         self.load_dashboard_async()
-
-    @work(exclusive=True)
-    async def load_users_async(self):
-        """Load users data asynchronously"""
-        self.clear_content_area()
-        content = self.query_one("#content_area")
-        
-        title_widget = Static("User Management", classes="content_title")
-        await content.mount(title_widget)
-        loading = LoadingIndicator()
-        await content.mount(loading)
-        
-        result = await asyncio.to_thread(self.app.call_api, "get_all_users")
-        
-        await loading.remove()
-        
-        if result is not None and result.get("success"):
-            users = result.get("data", [])
-            self.users_cache = users
-            
-            if users:
-                for user in users:
-                    user_widget = Container(
-                        Static(f"User: {user.get('username', '')}", classes="user_title"),
-                        Static(f"Email: {user.get('email', '')}", classes="user_info"),
-                        Static(f"Subscription: {user.get('subscription_level', '')}", classes="user_info"),
-                        Static(f"Total Spent: ${user.get('total_spent', 0):.2f}", classes="user_info"),
-                        Static(f"Favorite Genre: {user.get('favourite_genre', 'Not set')}", classes="user_info"),
-                        Static(f"Marketing Opt-in: {'Yes' if user.get('marketing_opt_in', False) else 'No'}", classes="user_info"),
-                        Button(f"Manage User", id=f"manage_user_{user.get('user_id')}", variant="primary", classes="manage_button"),
-                        classes="user_card"
-                    )
-                    await content.mount(user_widget)
-            else:
-                await content.mount(Static("No users found", classes="empty_message"))
-        else:
-            await content.mount(Static("Error loading users", classes="error_message"))
-
-    def load_users(self) -> None:
-        self.load_users_async()
-
-    def handle_manage_user(self, user_id: int) -> None:
-        """Handle user management"""
-        user = next((u for u in self.users_cache if u["user_id"] == user_id), None)
-        if user:
-            def handle_modal_result(result):
-                if result:
-                    if result.get("action") == "delete":
-                        self.delete_user(user_id)
-                    elif result.get("action") == "update":
-                        self.update_user(result)
-            
-            self.app.push_screen(
-                UserManagementModal(user),
-                handle_modal_result
-            )
-
-    @work(exclusive=True)
-    async def update_user(self, update_data: Dict):
-        """Update user asynchronously"""
-        user_id = update_data["user_id"]
-        
-        if update_data.get("new_password"):
-            password_result = await asyncio.to_thread(
-                self.app.call_api, "change_password", 
-                user_id=user_id, new_password=update_data["new_password"]
-            )
-            if not (password_result and password_result.get("success")):
-                self.notify("Failed to update password", severity="error")
-                return
-        
-        subscription_result = await asyncio.to_thread(
-            self.app.call_api, "update_subscription", 
-            user_id=user_id, subscription_level=update_data["subscription_level"]
-        )
-        
-        if subscription_result and subscription_result.get("success"):
-            self.notify("User updated successfully!", severity="information")
-            self.load_users()
-        else:
-            self.notify("Failed to update user", severity="error")
-
-    @work(exclusive=True)
-    async def delete_user(self, user_id: int):
-        """Delete user asynchronously"""
-        result = await asyncio.to_thread(self.app.call_api, "delete_user", user_id=user_id)
-        
-        if result is not None and result.get("success"):
-            self.notify("User deleted successfully!", severity="information")
-            self.load_users()
-        else:
-            error_msg = result.get("message", "Unknown error") if result else "API connection failed"
-            self.notify("Failed to delete user: " + error_msg, severity="error")
 
     @work(exclusive=True)
     async def load_content_async(self):
@@ -955,7 +1032,7 @@ class EasyFlixAdminApp(App):
     }
     
     .sidebar_button {
-        width: 90%;
+        width: 100%;
         margin: 1;
         height: 3;
         text-align: center;
@@ -979,6 +1056,30 @@ class EasyFlixAdminApp(App):
         padding: 1;
         height: 100%;
         overflow-y: auto;
+    }
+    
+    .filters_row {
+        width: 100%;
+        height: auto;
+        margin: 1 0;
+    }
+    
+    .filter_select {
+        margin: 0 1;
+        width: 1fr;
+        min-width: 15;
+        background: #1a1a2e;
+        border: solid #95a5a6;
+        transition: border 0.3s in_out_cubic;
+    }
+    
+    .filter_select:focus {
+        border: solid #e94560;
+    }
+    
+    .users_content {
+        width: 100%;
+        height: 1fr;
     }
     
     .refresh_button {
@@ -1270,6 +1371,11 @@ class EasyFlixAdminApp(App):
         background: #1a1a2e;
         border: solid #95a5a6;
         width: 100%;
+        transition: border 0.3s in_out_cubic;
+    }
+    
+    Select:focus {
+        border: solid #e94560;
     }
     
     Checkbox {
