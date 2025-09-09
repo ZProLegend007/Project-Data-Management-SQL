@@ -1,7 +1,7 @@
 ### How to run
 
-1. Download a zip of the repo
-2. **RUN init.py BEFORE ANYTHING ELSE** - this sets up the database ready for use
+1. Download a zip of the repo.
+2. **RUN init.py BEFORE ANYTHING ELSE** - this sets up the database ready for use.
 3. Run the programs, I recommend starting with EasyFlixUser and making 1 or 2 accounts to test some stuff, then use EasyFlixAdmin. You can use them side to side as well.
 
 **Admin login credentials:**
