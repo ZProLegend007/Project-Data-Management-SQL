@@ -40,9 +40,10 @@ THE DATABASE LAYOUT HAS CHANGED IN ORDER TO HAVE A MORE OPTIMISED DATABASE WITH 
 - **When a user opts out of marketing, their data is still in the database**
   - Ensure marketing data is cleared on opt out
  
-- **BECAUSE TEXTUAL IS RETARDED ON SOME TABS, CLICKING THE SAME TAB TRIGGERING A RELOAD WILL CAUSE A CRASH. IM SO DONE. THERE IS NO FIX FOR THIS. WILL BE A FUTURE IMPROVEMENT.**
+- **BECAUSE TEXTUAL IS dumb ON SOME TABS, CLICKING THE SAME TAB TRIGGERING A RELOAD WILL CAUSE A CRASH. IM SO DONE. THERE IS NO FIX FOR THIS. WILL BE A FUTURE IMPROVEMENT.**
   - Fun fact, at 3:28AM I found a fix
-  - It's fixed.
+  - It's fixed for the admin app (some solutions are just patches not complete fixes)
+  - User app on complicated tabs with still throw error
 
 #### Notes
 
