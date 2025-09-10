@@ -60,6 +60,8 @@ Adding encrypted comminication for auth.
 
 I know I'm not being assessed on the GUI but this project will be perfect. **I'm gunning for 100% on this.** 
 
+Forgot to add delete account button, adding now.
+
 ## Requirements Fulfillment Analysis
 
 ### Programming Requirements Assessment
