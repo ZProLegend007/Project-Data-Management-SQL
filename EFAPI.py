@@ -599,11 +599,19 @@ class EFAPI_Commands:
             conn = self._get_connection()
             cursor = conn.cursor()
             
-            cursor.execute("""
-                UPDATE CUSTOMERS 
-                SET Marketing_Opt_In = ?
-                WHERE User_ID = ?
-            """, (int(marketing_opt_in), user_id))
+            # If opting out, also clear favourite genre
+            if not marketing_opt_in:
+                cursor.execute("""
+                    UPDATE CUSTOMERS 
+                    SET Marketing_Opt_In = ?, Favourite_Genre = NULL
+                    WHERE User_ID = ?
+                """, (int(marketing_opt_in), user_id))
+            else:
+                cursor.execute("""
+                    UPDATE CUSTOMERS 
+                    SET Marketing_Opt_In = ?
+                    WHERE User_ID = ?
+                """, (int(marketing_opt_in), user_id))
             
             if cursor.rowcount > 0:
                 conn.commit()
