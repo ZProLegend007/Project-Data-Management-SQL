@@ -130,6 +130,33 @@ class RemoveConfirmModal(ModalScreen):
         else:
             self.dismiss(None)
 
+class DeleteAccountConfirmModal(ModalScreen):
+    """Modal for confirming account deletion"""
+    
+    def __init__(self, username: str):
+        super().__init__()
+        self.username = username
+    
+    def compose(self) -> ComposeResult:
+        yield Container(
+            Static(f"Delete Account", classes="modal_title"),
+            Static(f"Username: {self.username}", classes="modal_text"),
+            Static("Are you sure you want to permanently delete your account?", classes="modal_text"),
+            Static("This action cannot be undone and will remove all your data.", classes="modal_text"),
+            Horizontal(
+                Button("Delete Account", id="confirm_delete", variant="error"),
+                Button("Cancel", id="cancel_delete", variant="default"),
+                classes="modal_buttons"
+            ),
+            classes="modal_container_fullscreen"
+        )
+    
+    def on_button_pressed(self, event: Button.Pressed) -> None:
+        if event.button.id == "confirm_delete":
+            self.dismiss({"action": "delete"})
+        else:
+            self.dismiss(None)
+
 class LoginScreen(Screen):
     """Login screen for user authentication"""
     
@@ -348,6 +375,8 @@ class MainScreen(Screen):
             self.app.push_screen(ChangeSubscriptionScreen())
         elif event.button.id == "update_marketing":
             self.app.push_screen(MarketingPreferenceScreen())
+        elif event.button.id == "delete_account":
+            self.handle_delete_account()
 
     def on_input_changed(self, event: Input.Changed) -> None:
         if event.input.id == "search_text":
@@ -425,6 +454,19 @@ class MainScreen(Screen):
         """Handle show removal"""
         self.check_user_shows_for_removal(show_id)
 
+    def handle_delete_account(self) -> None:
+        """Handle account deletion"""
+        username = self.app.current_user.get("username", "Unknown")
+        
+        def handle_modal_result(result):
+            if result and result.get("action") == "delete":
+                self.delete_user_account()
+        
+        self.app.push_screen(
+            DeleteAccountConfirmModal(username),
+            handle_modal_result
+        )
+
     @work(exclusive=True)
     async def check_user_shows_for_removal(self, show_id: int):
         """Check user shows for removal"""
@@ -488,6 +530,24 @@ class MainScreen(Screen):
         else:
             error_msg = result.get("message", "Unknown error") if result else "API connection failed"
             self.notify("Failed to remove show: " + error_msg, severity="error")
+
+    @work(exclusive=True)
+    async def delete_user_account(self):
+        """Delete user account asynchronously"""
+        user_id = self.app.current_user.get("user_id")
+        result = await asyncio.to_thread(
+            self.app.call_api, "delete_user", 
+            user_id=user_id
+        )
+        
+        if result is not None and result.get("success"):
+            self.notify("Account deleted successfully!", severity="information")
+            self.app.current_user = None
+            # Return to login screen
+            self.app.pop_screen()
+        else:
+            error_msg = result.get("message", "Unknown error") if result else "API connection failed"
+            self.notify("Failed to delete account: " + error_msg, severity="error")
 
     def clear_content_area(self):
         """Safely clear content area"""
@@ -643,6 +703,7 @@ class MainScreen(Screen):
             Button("Change Password", id="change_password", variant="default"),
             Button("Change Subscription", id="change_subscription", variant="primary"),
             Button("Update Marketing Preference", id="update_marketing", variant="default"),
+            Button("Delete Account", id="delete_account", variant="error"),
             classes="account_info"
         ))
 
