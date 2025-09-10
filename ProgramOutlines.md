@@ -213,8 +213,9 @@ EasyFlixUser is a comprehensive user interface for the EasyFlix streaming servic
     - Basic subscription ($30) - Access to basic content
     - Premium subscription ($80) - Access to all content
   - **Marketing Preferences**
-    - Optional marketing communication opt-in
+    - Optional marketing data capture opt-in
     - GDPR-compliant preference management
+    - Clears marketing values on opt-out
   - **Automatic Billing**
     - Immediate subscription charge processing
     - Real-time cost calculation and display
@@ -300,10 +301,10 @@ EasyFlixUser is a comprehensive user interface for the EasyFlix streaming servic
     - Updated spending totals
 - **Marketing Preferences**
   - **Opt-in/Opt-out Management**
-    - Toggle marketing communications
+    - Toggle marketing data capture
     - GDPR compliance
     - Immediate preference updates
-    - Clear current status display
+    - Clears marketing data on opt-out
 
 ## Technical Features
 
