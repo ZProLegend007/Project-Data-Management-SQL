@@ -852,7 +852,13 @@ class MarketingPreferenceScreen(Screen):
         )
         
         if result is not None and result.get("success"):
-            self.app.current_user["marketing_opt_in"] = marketing_opt_in
+            # Refresh user data from database to get updated favourite_genre
+            user_info_result = await asyncio.to_thread(
+                self.app.call_api, "get_user_info", user_id=user_id
+            )
+            if user_info_result is not None and user_info_result.get("success"):
+                self.app.current_user.update(user_info_result.get("data", {}))
+            
             self.notify("Marketing preference updated successfully!", severity="information")
             self.app.pop_screen()
             
